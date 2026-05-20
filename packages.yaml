@@ -24,6 +24,7 @@ desktop-apps:
 
 vscode-extensions:
   platform: linux
+  requires: [code]
   vscode:
     ms-python.python:
     rust-lang.rust-analyzer:
