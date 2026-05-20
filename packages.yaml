@@ -21,6 +21,15 @@ desktop-apps:
       source: flathub
     com.github.PintaProject.Pinta:
       source: flathub
+  # Zen extensions via enterprise policy. Keys are the addon id, `source:` the
+  # AMO slug. Depend on the Zen flatpak so the policy lands after it installs.
+  zen:
+    uBlock0@raymondhill.net:                       # uBlock Origin
+      source: ublock-origin
+      dependencies: [app.zen_browser.zen]
+    "{446900e4-71c2-419f-a6a7-df9c091e268b}":      # Bitwarden
+      source: bitwarden-password-manager
+      dependencies: [app.zen_browser.zen]
 
 vscode-extensions:
   platform: linux
