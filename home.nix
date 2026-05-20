@@ -30,6 +30,7 @@ in
     uv
     pipx
     android-studio
+    keepass
   ];
 
   programs.git = {
