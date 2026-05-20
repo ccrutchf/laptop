@@ -28,6 +28,7 @@ in
     gh
     claude-code
     uv
+    android-studio
   ];
 
   programs.git = {
