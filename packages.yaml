@@ -11,6 +11,8 @@ desktop-apps:
       source: flathub
     com.discordapp.Discord:
       source: flathub
+    us.zoom.Zoom:
+      source: flathub
     org.gnome.Shotwell:
       source: flathub
     com.obsproject.Studio:
