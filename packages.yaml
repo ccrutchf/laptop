@@ -31,3 +31,11 @@ vscode-extensions:
     anthropic.claude-code:
     ms-dotnettools.csdevkit:
     eamodio.gitlens:
+
+data-tools:
+  platform: linux
+  architecture: amd64
+  pipx:
+    # Prebuilt cp311-abi3 wheel from the v0.6.1 GitHub release (CLI: `origin`).
+    e4e-data-management:
+      url: https://github.com/UCSD-E4E/e4e-data-management/releases/download/v0.6.1/e4e_data_management-0.6.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl

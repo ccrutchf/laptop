@@ -28,6 +28,7 @@ in
     gh
     claude-code
     uv
+    pipx
     android-studio
   ];
 
@@ -109,7 +110,7 @@ in
   # depend shells out to.
   home.activation.dependencyManagerInstall =
     lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      export PATH="${lib.makeBinPath [ pkgs.flatpak pkgs.vscode-fhs ]}:$PATH"
+      export PATH="${lib.makeBinPath [ pkgs.flatpak pkgs.vscode-fhs pkgs.pipx ]}:$PATH"
       $DRY_RUN_CMD ${depend}/bin/depend install --config ${./packages.yaml}
     '';
 
