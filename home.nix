@@ -66,6 +66,12 @@ in
       experimental-features = [ "scale-monitor-framebuffer" ];
     };
 
+    # Don't auto-suspend while plugged into AC ("When Plugged In" off in
+    # Settings → Power → Automatic Suspend). Battery behavior is unchanged.
+    "org/gnome/settings-daemon/plugins/power" = {
+      sleep-inactive-ac-type = "nothing";
+    };
+
     "org/gnome/desktop/interface" = {
       color-scheme = "prefer-dark";
       font-name = "Ubuntu 11";
