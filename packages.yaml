@@ -18,3 +18,5 @@ vscode-extensions:
     ms-python.python:
     rust-lang.rust-analyzer:
     anthropic.claude-code:
+    ms-dotnettools.csdevkit:
+    eamodio.gitlens:
