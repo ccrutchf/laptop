@@ -1,0 +1,20 @@
+desktop-apps:
+  platform: linux
+  flatpak:
+    app.zen_browser.zen:
+      source: flathub
+    com.nextcloud.desktopclient.nextcloud:
+      source: flathub
+    org.shotcut.Shotcut:
+      source: flathub
+    com.slack.Slack:
+      source: flathub
+    com.discordapp.Discord:
+      source: flathub
+
+vscode-extensions:
+  platform: linux
+  vscode:
+    ms-python.python:
+    rust-lang.rust-analyzer:
+    anthropic.claude-code:
