@@ -130,16 +130,13 @@ in
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users.chris = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "docker" "adbusers" ]; # Enable ‘sudo’ for the user.
+    extraGroups = [ "wheel" "docker" ]; # Enable ‘sudo’ for the user.
   #   packages = with pkgs; [
   #     tree
   #   ];
   };
 
   virtualisation.docker.enable = true;
-
-  # adb + fastboot, udev rules, and the `adbusers` group (chris is a member).
-  programs.adb.enable = true;
 
   # programs.firefox.enable = true;
 
@@ -148,6 +145,7 @@ in
   environment.systemPackages = with pkgs; [
     cudatoolkit       # nvcc + CUDA libraries on PATH
     pciutils          # lspci, useful for hardware debugging
+    android-tools     # adb + fastboot (systemd 258 handles uaccess automatically)
   ];
 
   # Some programs need SUID wrappers, can be configured further or are
