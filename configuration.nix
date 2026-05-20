@@ -39,6 +39,12 @@ in
   # Use latest kernel.
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
+  # Disable HDA audio power-saving: the SOF codec/controller suspending on idle
+  # clips the onset of playback (first syllable dropped when audio resumes).
+  boot.extraModprobeConfig = ''
+    options snd_hda_intel power_save=0 power_save_controller=N
+  '';
+
   networking.hostName = "chris-laptop"; # Define your hostname.
 
   # Configure network connections interactively with nmcli or nmtui.
