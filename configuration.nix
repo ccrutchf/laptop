@@ -150,6 +150,10 @@ in
   #   ];
   };
 
+  # Disable the root account: lock its password so there is no direct root
+  # login. Admin access is via `sudo` (chris is in the wheel group).
+  users.users.root.hashedPassword = "!";
+
   virtualisation.docker.enable = true;
 
   # programs.firefox.enable = true;
