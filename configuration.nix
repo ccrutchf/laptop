@@ -128,13 +128,15 @@ in
   # Enable CUPS to print documents.
   # services.printing.enable = true;
 
-  # Enable sound.
-  # services.pulseaudio.enable = true;
-  # OR
-  # services.pipewire = {
-  #   enable = true;
-  #   pulse.enable = true;
-  # };
+  # Sound via PipeWire with ALSA + PulseAudio compatibility. Enabled explicitly
+  # rather than relying on the GNOME module's implicit default.
+  services.pipewire = {
+    enable = true;
+    alsa.enable = true;
+    alsa.support32Bit = true;
+    pulse.enable = true;
+  };
+  security.rtkit.enable = true; # realtime scheduling for PipeWire
 
   # Enable touchpad support (enabled default in most desktopManager).
   # services.libinput.enable = true;
