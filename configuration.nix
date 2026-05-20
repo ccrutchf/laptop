@@ -44,6 +44,12 @@ in
   # Configure network connections interactively with nmcli or nmtui.
   networking.networkmanager.enable = true;
 
+  # openconnect plugin: adds the AnyConnect VPN type to GNOME Settings → Network,
+  # used for the UCSD campus VPN (gateway vpn.ucsd.edu, Cisco AnyConnect + Duo).
+  networking.networkmanager.plugins = with pkgs; [
+    networkmanager-openconnect
+  ];
+
   # Set your time zone.
   time.timeZone = "America/Los_Angeles";
 
