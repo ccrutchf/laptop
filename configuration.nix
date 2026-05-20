@@ -152,6 +152,7 @@ in
     cudatoolkit       # nvcc + CUDA libraries on PATH
     pciutils          # lspci, useful for hardware debugging
     android-tools     # adb + fastboot (systemd 258 handles uaccess automatically)
+    dnsutils          # nslookup, dig, host
   ];
 
   # Some programs need SUID wrappers, can be configured further or are
