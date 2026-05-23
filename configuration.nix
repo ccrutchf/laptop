@@ -168,6 +168,28 @@ in
 
   virtualisation.docker.enable = true;
 
+  # --- VR / OpenXR: WiVRn streams the rendered XR view to a standalone Quest 2 ---
+  # over Wi-Fi (Monado-based runtime). Phase 0 of the wayland-vr project
+  # (~/Repos/personal/wayland-vr): validate the streaming transport before writing
+  # any compositor code. Runs as a systemd *user* service; uses avahi for headset
+  # discovery and opens TCP/UDP 9757.
+  services.wivrn = {
+    enable = true;
+    openFirewall = true;   # discovery + streaming port (9757)
+    autoStart = true;      # start with the graphical session
+    highPriority = true;   # cap_sys_nice wrapper for smoother async reprojection
+    steam.enable = false;  # OpenXR-native target; no SteamVR/Steam dependency
+
+    # Hybrid GPU: run Monado's render + encode on the RTX 3060 (NVENC), not the
+    # iGPU. Mirrors the env the `nvidia-offload` wrapper sets.
+    monadoEnvironment = {
+      __NV_PRIME_RENDER_OFFLOAD = "1";
+      __NV_PRIME_RENDER_OFFLOAD_PROVIDER = "NVIDIA-G0";
+      __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+      __VK_LAYER_NV_optimus = "NVIDIA_only";
+    };
+  };
+
   # programs.firefox.enable = true;
 
   # List packages installed in system profile.
@@ -177,6 +199,7 @@ in
     pciutils          # lspci, useful for hardware debugging
     android-tools     # adb + fastboot (systemd 258 handles uaccess automatically)
     dnsutils          # nslookup, dig, host
+    vulkan-tools      # vulkaninfo, for diagnosing the VR GPU/encode path
   ];
 
   # Some programs need SUID wrappers, can be configured further or are
