@@ -85,6 +85,8 @@ in
 
     "org/gnome/desktop/wm/preferences" = {
       titlebar-font = "Ubuntu Bold 11";
+      # GNOME shows only the close button by default; add minimize + maximize.
+      button-layout = "appmenu:minimize,maximize,close";
     };
 
     "org/gnome/shell" = {
