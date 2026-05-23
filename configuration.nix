@@ -88,6 +88,18 @@ in
   # Enable flakes and the new nix CLI.
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
+  # Deduplicate identical store paths via hardlinks after every build.
+  nix.settings.auto-optimise-store = true;
+
+  # Automatic Nix store garbage collection. Every `nixos-rebuild switch` leaves
+  # the previous system generation (and its store closure) behind for rollback;
+  # without this they accumulate indefinitely. Weekly, keeping a 30-day window.
+  nix.gc = {
+    automatic = true;
+    dates     = "weekly";
+    options   = "--delete-older-than 30d";
+  };
+
   # NVIDIA RTX 3060 Mobile (Ampere) + Intel Tiger Lake iGPU.
   # PRIME render offload: iGPU drives the display by default, NVIDIA used on demand
   # via the `nvidia-offload` wrapper (or __NV_PRIME_RENDER_OFFLOAD=1).
