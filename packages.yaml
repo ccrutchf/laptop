@@ -35,6 +35,8 @@ vscode-extensions:
     anthropic.claude-code:
     ms-dotnettools.csdevkit:
     eamodio.gitlens:
+    bbenoist.nix:
+    ms-vscode-remote.remote-ssh:
 
 data-tools:
   platform: linux
