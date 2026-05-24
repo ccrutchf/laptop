@@ -1,43 +1,45 @@
-# Edit this configuration file to define what should be installed on
-# your system. Help is available in the configuration.nix(5) man page, on
-# https://search.nixos.org/options and in the NixOS manual (`nixos-help`).
+# NixOS entry point for chris-laptop. Now a flake (see flake.nix); home-manager,
+# disko, impermanence, lanzaboote and sops-nix come in as flake inputs/modules,
+# not via fetchTarball. The disk layout lives in disko-config.nix.
+{ config, lib, pkgs, inputs, ... }:
 
-{ config, lib, pkgs, ... }:
-
-let
-  # Tracks nixos-unstable (system channel is set separately via `nix-channel`).
-  home-manager = builtins.fetchTarball {
-    url = "https://github.com/nix-community/home-manager/archive/master.tar.gz";
-  };
-in
 {
   imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
-      "${home-manager}/nixos"
+    [ ./hardware-configuration.nix
+      ./modules/impermanence.nix
+      ./modules/hibernation.nix
+      ./modules/secure-boot.nix
+      ./modules/backups.nix
     ];
 
-  home-manager.useGlobalPkgs = true;
-  home-manager.useUserPackages = true;
-  home-manager.users.chris = import ./home.nix;
+  # --- local feature toggles (see each module) ---
+  my.impermanence.enable = true;   # ephemeral btrfs root + /persist
+  my.hibernation.enable  = true;   # suspend-then-hibernate (resume_offset: fill in post-install)
+  my.secureBoot.enable   = false;  # PHASE 2: flip true AFTER `sbctl create-keys` (see module)
+  my.backups.enable      = false;  # flip true AFTER the age key + secrets/secrets.yaml exist
 
-  # Use the systemd-boot EFI boot loader.
+  # Boot loader. systemd-boot by default; modules/secure-boot.nix replaces it with
+  # lanzaboote (signed) once my.secureBoot.enable = true.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # systemd-stage1 initrd: required for TPM2 auto-unlock via systemd-cryptsetup.
-  # Falls back to a passphrase prompt if TPM unlock fails.
+  # systemd-stage1 initrd: TPM2 auto-unlock + the impermanence rollback both need it.
   boot.initrd.systemd.enable = true;
 
-  boot.initrd.luks.devices."cryptroot" = {
-    device = "/dev/disk/by-uuid/f395ced0-e269-4a49-8454-642f78ad9b29";
-    # `tpm2-device=auto` makes systemd-cryptsetup try the TPM2-enrolled keyslot
-    # first; on failure it prompts for the existing passphrase.
-    crypttabExtraOpts = [ "tpm2-device=auto" ];
-  };
+  # LUKS device is created/declared by disko (disko-config.nix). Here we only add
+  # the TPM2 auto-unlock opt; the keyslot is enrolled post-install with
+  # systemd-cryptenroll (and re-enrolled once Secure Boot is on — see secure-boot.nix).
+  boot.initrd.luks.devices."cryptroot".crypttabExtraOpts = [ "tpm2-device=auto" ];
 
-  # Use latest kernel.
   boot.kernelPackages = pkgs.linuxPackages_latest;
+
+  # zswap: compressed RAM cache in front of the disk swap (hibernation-compatible,
+  # unlike zram). mem_sleep_default=deep: prefer S3 over drain-prone s2idle for the
+  # pre-hibernate window (machine exposes `[s2idle] deep`).
+  boot.kernelParams = [
+    "zswap.enabled=1" "zswap.compressor=zstd" "zswap.zpool=zsmalloc" "zswap.max_pool_percent=20"
+    "mem_sleep_default=deep"
+  ];
 
   # Disable HDA audio power-saving: the SOF codec/controller suspending on idle
   # clips the onset of playback (first syllable dropped when audio resumes).
@@ -45,64 +47,72 @@ in
     options snd_hda_intel power_save=0 power_save_controller=N
   '';
 
-  networking.hostName = "chris-laptop"; # Define your hostname.
-
-  # Configure network connections interactively with nmcli or nmtui.
+  networking.hostName = "chris-laptop";
   networking.networkmanager.enable = true;
+  # openconnect plugin: AnyConnect VPN type in GNOME Settings (UCSD vpn.ucsd.edu).
+  networking.networkmanager.plugins = with pkgs; [ networkmanager-openconnect ];
 
-  # openconnect plugin: adds the AnyConnect VPN type to GNOME Settings → Network,
-  # used for the UCSD campus VPN (gateway vpn.ucsd.edu, Cisco AnyConnect + Duo).
-  networking.networkmanager.plugins = with pkgs; [
-    networkmanager-openconnect
-  ];
-
-  # Set your time zone.
   time.timeZone = "America/Los_Angeles";
+  # Was commented out (defaulting to the C locale). Set it explicitly.
+  i18n.defaultLocale = "en_US.UTF-8";
 
-  # Configure network proxy if necessary
-  # networking.proxy.default = "http://user:password@proxy:port/";
-  # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
-
-  # Select internationalisation properties.
-  # i18n.defaultLocale = "en_US.UTF-8";
-  # console = {
-  #   font = "Lat2-Terminus16";
-  #   keyMap = "us";
-  #   useXkbConfig = true; # use xkb.options in tty.
-  # };
-
-  # Enable the X11 windowing system.
   services.xserver.enable = true;
-
-
-  # Enable the GNOME Desktop Environment.
   services.displayManager.gdm.enable = true;
   services.desktopManager.gnome.enable = true;
 
-  # Enable Flatpak
   services.flatpak.enable = true;
 
-  # Allow proprietary packages (e.g. vscode, nvidia driver, cuda).
+  # CUPS for campus/network printers.
+  services.printing.enable = true;
+
+  # Bluetooth (controller present). Pinned explicitly so the flake owns it.
+  hardware.bluetooth.enable = true;
+
+  # Intel thermal management (Tiger Lake-H + RTX 3060 in a 15" chassis).
+  services.thermald.enable = true;
+
+  # Firmware updates via LVFS (SSD/Thunderbolt/peripherals; MSI BIOS coverage is thin).
+  services.fwupd.enable = true;
+
+  # Periodic SSD TRIM (carried forward, now explicit) + btrfs scrub (bit-rot scan).
+  services.fstrim.enable = true;
+  services.btrfs.autoScrub = {
+    enable = true;
+    interval = "weekly";
+    fileSystems = [ "/" ];   # one btrfs fs; scrubbing any subvol scrubs the device
+  };
+
   nixpkgs.config.allowUnfree = true;
 
-  # Enable flakes and the new nix CLI.
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    auto-optimise-store   = true;
+    # Trust wheel so per-project devshell / cachix substituters (rust-overlay, the
+    # CUDA cache, project caches) are honored instead of silently ignored. Safe
+    # here — single-user box, and chris already has sudo.
+    trusted-users = [ "root" "@wheel" ];
+    # Keep dev-shell build inputs from being GC'd (pairs with direnv/nix-direnv).
+    keep-outputs     = true;
+    keep-derivations = true;
+    # CUDA binary cache: download CUDA-enabled packages instead of compiling them.
+    extra-substituters       = [ "https://cuda-maintainers.cachix.org" ];
+    extra-trusted-public-keys = [ "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E=" ];
+  };
 
-  # Deduplicate identical store paths via hardlinks after every build.
-  nix.settings.auto-optimise-store = true;
-
-  # Automatic Nix store garbage collection. Every `nixos-rebuild switch` leaves
-  # the previous system generation (and its store closure) behind for rollback;
-  # without this they accumulate indefinitely. Weekly, keeping a 30-day window.
   nix.gc = {
     automatic = true;
     dates     = "weekly";
     options   = "--delete-older-than 30d";
   };
 
-  # NVIDIA RTX 3060 Mobile (Ampere) + Intel Tiger Lake iGPU.
-  # PRIME render offload: iGPU drives the display by default, NVIDIA used on demand
-  # via the `nvidia-offload` wrapper (or __NV_PRIME_RENDER_OFFLOAD=1).
+  # `comma`: run any nixpkgs binary on demand (`, ffmpeg`) without installing it,
+  # and command-not-found suggestions. Uses the prebuilt nix-index database (the
+  # nix-index-database flake input) so it works immediately — no manual `nix-index`.
+  programs.nix-index.enable = true;
+  programs.nix-index-database.comma.enable = true;
+
+  # NVIDIA RTX 3060 Mobile (Ampere) + Intel Tiger Lake iGPU. PRIME render offload:
+  # iGPU drives the display, NVIDIA on demand via the `nvidia-offload` wrapper.
   hardware.graphics = {
     enable = true;
     enable32Bit = true;
@@ -113,8 +123,8 @@ in
   hardware.nvidia = {
     modesetting.enable = true;
     powerManagement.enable = true;
-    powerManagement.finegrained = true;  # allow dGPU to power down when idle
-    open = true;                         # open kernel modules (supported on Ampere+)
+    powerManagement.finegrained = true;
+    open = true;
     nvidiaSettings = true;
     package = config.boot.kernelPackages.nvidiaPackages.stable;
 
@@ -128,60 +138,40 @@ in
     };
   };
 
-  # Ubuntu fonts (classic Ubuntu typeface) — used by home-manager dconf settings.
-  fonts.packages = with pkgs; [
-    ubuntu-classic
-  ];
+  fonts.packages = with pkgs; [ ubuntu-classic ];
 
-  # Configure keymap in X11
-  # services.xserver.xkb.layout = "us";
-  # services.xserver.xkb.options = "eurosign:e,caps:escape";
-
-  # Enable CUPS to print documents.
-  # services.printing.enable = true;
-
-  # Sound via PipeWire with ALSA + PulseAudio compatibility. Enabled explicitly
-  # rather than relying on the GNOME module's implicit default.
   services.pipewire = {
     enable = true;
     alsa.enable = true;
     alsa.support32Bit = true;
     pulse.enable = true;
   };
-  security.rtkit.enable = true; # realtime scheduling for PipeWire
+  security.rtkit.enable = true;
 
-  # Enable touchpad support (enabled default in most desktopManager).
-  # services.libinput.enable = true;
-
-  # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users.chris = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "docker" ]; # Enable ‘sudo’ for the user.
-  #   packages = with pkgs; [
-  #     tree
-  #   ];
+    # dialout = serial/UART console access (junkyard UART work, /dev/ttyUSB*).
+    extraGroups = [ "wheel" "docker" "dialout" ];
   };
-
-  # Disable the root account: lock its password so there is no direct root
-  # login. Admin access is via `sudo` (chris is in the wheel group).
+  # No direct root login; admin via sudo (chris in wheel).
   users.users.root.hashedPassword = "!";
 
   virtualisation.docker.enable = true;
+  # GPU-accelerated containers: `docker run --gpus all ...` (PyTorch/TF/CUDA images).
+  hardware.nvidia-container-toolkit.enable = true;
 
-  # --- VR / OpenXR: WiVRn streams the rendered XR view to a standalone Quest 2 ---
-  # over Wi-Fi (Monado-based runtime). Phase 0 of the wayland-vr project
-  # (~/Repos/personal/wayland-vr): validate the streaming transport before writing
-  # any compositor code. Runs as a systemd *user* service; uses avahi for headset
-  # discovery and opens TCP/UDP 9757.
+  # Android device access (adb/fastboot/recovery + the Quest) is handled by
+  # systemd's built-in uaccess rules — the old `android-udev-rules` package was
+  # removed from nixpkgs as redundant. Add a `services.udev.extraRules` entry only
+  # if a specific device/mode turns out not to be tagged.
+
+  # --- VR / OpenXR: WiVRn streams the rendered XR view to a Quest 2 over Wi-Fi ---
   services.wivrn = {
     enable = true;
-    openFirewall = true;   # discovery + streaming port (9757)
-    autoStart = true;      # start with the graphical session
-    highPriority = true;   # cap_sys_nice wrapper for smoother async reprojection
-    steam.enable = false;  # OpenXR-native target; no SteamVR/Steam dependency
-
-    # Hybrid GPU: run Monado's render + encode on the RTX 3060 (NVENC), not the
-    # iGPU. Mirrors the env the `nvidia-offload` wrapper sets.
+    openFirewall = true;
+    autoStart = true;
+    highPriority = true;
+    steam.enable = false;
     monadoEnvironment = {
       __NV_PRIME_RENDER_OFFLOAD = "1";
       __NV_PRIME_RENDER_OFFLOAD_PROVIDER = "NVIDIA-G0";
@@ -190,66 +180,67 @@ in
     };
   };
 
-  # programs.firefox.enable = true;
-
-  # Dynamic-loader shim for prebuilt (non-Nix) ELF binaries. Lets the plain,
-  # non-FHS VSCode run extensions that download native binaries — e.g.
-  # ms-dotnettools.csdevkit's Roslyn language server and debugger — without an
-  # FHS wrapper, whose bubblewrap sandbox would set no_new_privs and block sudo
-  # in the integrated terminal.
+  # Dynamic-loader shim for prebuilt (non-Nix) ELF binaries — lets the plain
+  # (non-FHS) VSCode run extensions that download native binaries.
   programs.nix-ld.enable = true;
-
-  # List packages installed in system profile.
-  # You can use https://search.nixos.org/ to find more packages (and options).
-  environment.systemPackages = with pkgs; [
-    cudatoolkit       # nvcc + CUDA libraries on PATH
-    pciutils          # lspci, useful for hardware debugging
-    android-tools     # adb + fastboot (systemd 258 handles uaccess automatically)
-    dnsutils          # nslookup, dig, host
-    vulkan-tools      # vulkaninfo, for diagnosing the VR GPU/encode path
+  # Libraries that prebuilt (pip/conda) wheels dlopen via nix-ld — without these
+  # `import cv2` dies with "libGL.so.1: cannot open object file". Covers
+  # opencv-python / numpy / torch wheels and the Android SDK's prebuilt binaries.
+  # (CUDA wheels ship their own CUDA libs; libcuda comes from the NVIDIA driver.)
+  programs.nix-ld.libraries = with pkgs; [
+    stdenv.cc.cc.lib            # libstdc++
+    zlib
+    glib                        # libgthread (opencv)
+    libGL libglvnd              # cv2 / rendering
+    openssl
+    libx11 libxext libxrender libsm libice
+    libxtst libxi                # JetBrains/Java GUI input (Toolbox-installed IDEs)
+    libsecret                    # JetBrains credential storage
+    libxkbcommon
+    fontconfig freetype
   ];
 
-  # Some programs need SUID wrappers, can be configured further or are
-  # started in user sessions.
-  # programs.mtr.enable = true;
-  # programs.gnupg.agent = {
-  #   enable = true;
-  #   enableSSHSupport = true;
-  # };
+  # --- Gaming (Steam / Proton) ---
+  # Native Steam — better PRIME / 32-bit / controller integration than the flatpak
+  # (32-bit graphics is already enabled above). PRIME offload is made AUTOMATIC via
+  # extraEnv below, so games render on the RTX 3060 without `nvidia-offload` in the
+  # launch options. GameMode stays opt-in per game: `gamemoderun %command%`.
+  # For VR/Beat Saber the primary path is WiVRn + OpenComposite + Proton (NO
+  # SteamVR); ALVR + SteamVR is the fallback (alvr below).
+  programs.steam = {
+    enable = true;
+    remotePlay.openFirewall = true;   # in-home streaming / Remote Play
+    # Bake the offload env into Steam's FHS wrapper so every child (game) inherits
+    # it — same 4 vars as the `nvidia-offload` wrapper / WiVRn monadoEnvironment.
+    # TRADEOFF: the Steam *client* UI also lands on the dGPU, so finegrained power
+    # management won't let the 3060 sleep while Steam is open — close it when idle.
+    package = pkgs.steam.override {
+      extraEnv = {
+        __NV_PRIME_RENDER_OFFLOAD = "1";
+        __NV_PRIME_RENDER_OFFLOAD_PROVIDER = "NVIDIA-G0";
+        __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+        __VK_LAYER_NV_optimus = "NVIDIA_only";
+      };
+    };
+  };
+  programs.gamemode.enable = true;    # CPU governor/scheduling boost (gamemoderun)
 
-  # List services that you want to enable:
-
-  # Enable the OpenSSH daemon.
-  # services.openssh.enable = true;
+  environment.systemPackages = with pkgs; [
+    cudatoolkit       # nvcc + CUDA libraries on PATH
+    pciutils          # lspci
+    android-tools     # adb + fastboot
+    dnsutils          # nslookup, dig, host
+    vulkan-tools      # vulkaninfo (VR GPU/encode diagnostics)
+    # rebuild/secrets tooling
+    sbctl             # Secure Boot key management (lanzaboote)
+    sops age ssh-to-age  # edit/inspect sops secrets; derive age key from the SSH key
+    nvtopPackages.nvidia # GPU utilization monitor (training/inference)
+    tio               # serial terminal for UART console work (junkyard etc.)
+    alvr              # SteamVR->Quest streaming, fallback VR path (opens its own LAN ports at runtime)
+  ];
 
   networking.firewall.enable = true;
-  # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
 
-  # Copy the NixOS configuration file and link it from the resulting system
-  # (/run/current-system/configuration.nix). This is useful in case you
-  # accidentally delete configuration.nix.
-  # system.copySystemConfiguration = true;
-
-  # This option defines the first version of NixOS you have installed on this particular machine,
-  # and is used to maintain compatibility with application data (e.g. databases) created on older NixOS versions.
-  #
-  # Most users should NEVER change this value after the initial install, for any reason,
-  # even if you've upgraded your system to a new NixOS release.
-  #
-  # This value does NOT affect the Nixpkgs version your packages and OS are pulled from,
-  # so changing it will NOT upgrade your system - see https://nixos.org/manual/nixos/stable/#sec-upgrading for how
-  # to actually do that.
-  #
-  # This value being lower than the current NixOS release does NOT mean your system is
-  # out of date, out of support, or vulnerable.
-  #
-  # Do NOT change this value unless you have manually inspected all the changes it would make to your configuration,
-  # and migrated your data accordingly.
-  #
-  # For more information, see `man configuration.nix` or https://nixos.org/manual/nixos/stable/options#opt-system.stateVersion .
-  system.stateVersion = "25.11"; # Did you read the comment?
-
+  # See the comment in the original: keep in sync with home.stateVersion.
+  system.stateVersion = "25.11";
 }
-

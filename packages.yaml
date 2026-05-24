@@ -25,6 +25,10 @@ desktop-apps:
       source: flathub
     org.signal.Signal:
       source: flathub
+    org.chromium.Chromium:
+      source: flathub
+    org.pgadmin.pgadmin4:
+      source: flathub
 
 vscode-extensions:
   platform: linux

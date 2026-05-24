@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Initial setup: register the home-manager channel, point /etc/nixos at this
-# repo, and rebuild. Safe to re-run.
+# Initial setup for an ALREADY-INSTALLED machine: point /etc/nixos at this repo
+# and switch via the flake. Safe to re-run. (For a from-scratch reinstall with
+# disko, see REBUILD.md.)
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,7 +27,7 @@ else
   sudo ln -s "$REPO" /etc/nixos
 fi
 
-echo "==> Running nixos-rebuild switch"
-sudo nixos-rebuild switch
+echo "==> Running nixos-rebuild switch --flake"
+sudo nixos-rebuild switch --flake "$REPO#chris-laptop"
 
 echo "==> Done."
