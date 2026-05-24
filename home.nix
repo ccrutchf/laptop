@@ -6,6 +6,13 @@ let
   # pattern in configuration.nix.
   depend = (builtins.getFlake "github:ccrutchf/dependency-manager")
     .packages.${pkgs.stdenv.hostPlatform.system}.default;
+
+  # VSCode launched with --no-sandbox. Plain (non-FHS) build: the FHS wrapper
+  # runs VSCode inside bubblewrap, which sets no_new_privs and blocks sudo in
+  # the integrated terminal. Extensions that fetch native binaries (e.g.
+  # ms-dotnettools.csdevkit) rely on programs.nix-ld (configuration.nix) instead
+  # of an FHS layout.
+  vscode = pkgs.vscode.override { commandLineArgs = "--no-sandbox"; };
 in
 {
   home.username = "chris";
@@ -22,7 +29,7 @@ in
     gnomeExtensions.appindicator
     gnomeExtensions.user-themes
     gnomeExtensions.desktop-icons-ng-ding
-    vscode-fhs
+    vscode
     (pkgs.callPackage ./warp-terminal.nix { })
     depend
     gh
@@ -119,7 +126,7 @@ in
   # depend shells out to.
   home.activation.dependencyManagerInstall =
     lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      export PATH="${lib.makeBinPath [ pkgs.flatpak pkgs.vscode-fhs pkgs.pipx ]}:$PATH"
+      export PATH="${lib.makeBinPath [ pkgs.flatpak vscode pkgs.pipx ]}:$PATH"
       $DRY_RUN_CMD ${depend}/bin/depend install --config ${./packages.yaml}
     '';
 
