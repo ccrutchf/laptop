@@ -37,6 +37,7 @@ vscode-extensions:
     eamodio.gitlens:
     bbenoist.nix:
     ms-vscode-remote.remote-ssh:
+    ms-vscode-remote.remote-containers:
 
 data-tools:
   platform: linux
