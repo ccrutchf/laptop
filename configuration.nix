@@ -192,6 +192,13 @@ in
 
   # programs.firefox.enable = true;
 
+  # Dynamic-loader shim for prebuilt (non-Nix) ELF binaries. Lets the plain,
+  # non-FHS VSCode run extensions that download native binaries — e.g.
+  # ms-dotnettools.csdevkit's Roslyn language server and debugger — without an
+  # FHS wrapper, whose bubblewrap sandbox would set no_new_privs and block sudo
+  # in the integrated terminal.
+  programs.nix-ld.enable = true;
+
   # List packages installed in system profile.
   # You can use https://search.nixos.org/ to find more packages (and options).
   environment.systemPackages = with pkgs; [
