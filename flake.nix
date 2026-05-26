@@ -19,7 +19,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # "Erase your darlings": ephemeral btrfs root rolled back to @blank + /persist.
+    # "Erase your darlings": ephemeral btrfs root (recreated empty each boot) + /persist.
     impermanence = {
       url = "github:nix-community/impermanence";
       inputs.nixpkgs.follows = "nixpkgs";  # dedupe — don't drag in a 2nd nixpkgs

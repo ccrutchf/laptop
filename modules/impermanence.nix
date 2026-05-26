@@ -18,17 +18,17 @@
 with lib;
 let
   cfg = config.my.impermanence;
+  # This host's LUKS mapper (disko names it "cryptroot"). Hardcoded because the
+  # rollback's unit ordering must match it (dev-mapper-NAME.device,
+  # systemd-cryptsetup@NAME.service) — deriving everything from one name keeps the
+  # device path and the unit names in lockstep.
+  luksName = "cryptroot";
+  device = "/dev/mapper/${luksName}";
 in {
   imports = [ inputs.impermanence.nixosModules.impermanence ];
 
-  options.my.impermanence = {
-    enable = mkEnableOption "ephemeral btrfs root (@ reset empty each boot) + /persist state";
-    device = mkOption {
-      type = types.str;
-      default = "/dev/mapper/cryptroot";
-      description = "The unlocked btrfs device holding @ (and @old).";
-    };
-  };
+  options.my.impermanence.enable =
+    mkEnableOption "ephemeral btrfs root (@ reset empty each boot) + /persist state";
 
   config = mkIf cfg.enable {
     boot.initrd.systemd.enable = true;
@@ -51,8 +51,8 @@ in {
       # before the root mounts. The .device unit is already in the boot transaction
       # (sysroot.mount needs it), so ordering after it makes us wait for it.
       after = [
-        "dev-mapper-cryptroot.device"
-        "systemd-cryptsetup@cryptroot.service"
+        "dev-mapper-${luksName}.device"
+        "systemd-cryptsetup@${luksName}.service"
         "systemd-hibernate-resume.service"
       ];
       before = [ "sysroot.mount" ];
@@ -63,7 +63,7 @@ in {
         # Debugging in initrd (its journal isn't forwarded on this host): prepend
         # `exec > /dev/kmsg 2>&1`, add `echo` markers, then read them back via `dmesg`.
         mkdir -p /btrfs_tmp
-        mount -t btrfs -o subvolid=5 ${cfg.device} /btrfs_tmp
+        mount -t btrfs -o subvolid=5 ${device} /btrfs_tmp
 
         # systemd creates var/lib/{machines,portables}, /srv, /tmp, /var/tmp as
         # subvolumes INSIDE @, so deleting @ needs those gone first. Recurse,
