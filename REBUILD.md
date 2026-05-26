@@ -27,23 +27,24 @@ sudo nix --experimental-features "nix-command flakes" \
   run github:nix-community/disko -- --mode disko ./disko-config.nix
 ```
 
-## 2. Capture the empty @blank (impermanence needs it)
-disko has mounted everything under `/mnt` and opened `/dev/mapper/cryptroot`.
-Snapshot the still-EMPTY `@` so the per-boot rollback has a pristine target:
+> No `@blank` step is needed — the impermanence rollback recreates `@` empty on
+> every boot and moves the previous root to `@old`. On the very first boot the
+> freshly-installed `@` just becomes the first `@old`.
+
+## 2. Install
 ```sh
-sudo mkdir -p /mnt2
-sudo mount -o subvolid=5 /dev/mapper/cryptroot /mnt2
-sudo btrfs subvolume snapshot /mnt2/@ /mnt2/@blank
-sudo umount /mnt2
+# First the declarative login password — mutableUsers=false + an ephemeral
+# /etc/shadow means a MISSING hash file = locked out on first boot. disko mounted
+# /persist at /mnt/persist:
+sudo mkdir -p /mnt/persist/passwd
+mkpasswd -m sha-512 | sudo tee /mnt/persist/passwd/chris
+sudo chmod 600 /mnt/persist/passwd/chris
+
+sudo nixos-install --no-root-passwd --flake /path/to/repo#chris-laptop   # root is declaratively locked
+# reboot
 ```
 
-## 3. Install
-```sh
-sudo nixos-install --flake /path/to/repo#chris-laptop
-# set a root password if prompted, then reboot
-```
-
-## 4. First boot — post-install
+## 3. First boot — post-install
 - [ ] **TPM2 auto-unlock** (basic now; re-enrolled with PCRs in step 6):
   ```sh
   sudo systemd-cryptenroll --tpm2-device=auto \
@@ -64,13 +65,13 @@ sudo nixos-install --flake /path/to/repo#chris-laptop
       (while empty) so image builds are NoCoW, and revert the Makefile's `truncate`
       workaround back to `fallocate` (it was only there because of the old ext2 root).
 
-## 5. Verify hibernate
+## 4. Verify hibernate
 ```sh
 systemctl hibernate     # then power on — should RESUME, not cold-boot
 ```
 If it cold-boots, `resume_offset` is wrong — recompute in step 4.
 
-## 6. Secure Boot (phase 2)
+## 5. Secure Boot (phase 2)
 ```sh
 sudo sbctl create-keys
 # set my.secureBoot.enable = true; in configuration.nix

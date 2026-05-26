@@ -10,7 +10,6 @@ This is the NixOS system configuration for a single machine (`chris-laptop`, an 
 - **Update inputs:** `nix flake update` (or `nix flake update nixpkgs`), then switch.
 - **Validate without activating:** `nixos-rebuild build --flake .#chris-laptop` (build the toplevel, no switch) or `nix flake check`. Confirm a change builds before switching — and ALWAYS before a disk wipe.
 - **Disk layout (DESTRUCTIVE) + full reinstall:** see `REBUILD.md` (disko wipes the 2TB drive; Windows on the other NVMe is untouched).
-- **Initial setup on a fresh machine:** `./deploy.sh` — symlinks `/etc/nixos` to this repo (backing up any existing dir) and runs `nixos-rebuild switch`. Idempotent; refuses to overwrite a symlink pointing elsewhere.
 - **Preview non-Nix package changes:** `depend plan --config packages.yaml` shows the resolved install plan for `packages.yaml` without applying it. There is no test suite or linter in this repo — `nixos-rebuild`'s evaluation is the only validation.
 
 ## Architecture
@@ -31,8 +30,8 @@ This is the NixOS system configuration for a single machine (`chris-laptop`, an 
 - `zen:` / `firefox:` — browser extensions installed via enterprise-policy files. **Keys are the addon ID** (quote IDs that start with `{`, e.g. Bitwarden's GUID, or YAML parses them as a flow-map), and `source:` is the AMO slug used to build the `.xpi` URL.
 - `dependencies: [<id>]` orders one package after another within the plan (e.g. Zen extensions depend on `app.zen_browser.zen` so the policy is written after the flatpak's install dir exists).
 **`my.*` feature modules** (`modules/`, toggled in `configuration.nix`):
-- `impermanence.nix` — btrfs `@`→`@blank` rollback in initrd + the `/persist` bind list. Ordered `After=systemd-hibernate-resume.service` (so a hibernate resume isn't wiped) and reseeds `/usr/bin/env` for the systemd-258 empty-`/usr` PID1 freeze. `@blank` must be captured EMPTY at install (see `REBUILD.md`).
-- `hibernation.nix` — suspend-then-hibernate; resume from the NoCoW `/swap/swapfile`. **`resume_offset` is a post-install fill-in** (`btrfs inspect-internal map-swapfile`).
+- `impermanence.nix` — btrfs root rollback in initrd: each boot `@` is moved to `@old` (recoverable) and recreated EMPTY via `btrfs subvolume create` (a recursive delete first clears the subvolumes systemd nests under `@`: `var/lib/{machines,portables}`, `/srv`, `/tmp`, `/var/tmp`). Plus the `/persist` bind list. Ordered after the LUKS device + `systemd-hibernate-resume.service` (so a resume isn't wiped); reseeds `/usr/bin/env` for the systemd-258 empty-`/usr` PID1 freeze. **GOTCHA:** the rollback's `mount`/`btrfs` binaries must be in `boot.initrd.systemd.storePaths` — the service `path` alone leaves them off the initrd (`mount: command not found`). Because `/etc/shadow` is on the ephemeral root, **passwords are declarative**: `users.users.chris.hashedPasswordFile` (hash in `/persist`, not git) + `users.mutableUsers = false`.
+- `hibernation.nix` — lid matrix (docked→`ignore`=clamshell, AC/battery→suspend-then-hibernate); resume from the NoCoW `/swap/swapfile` (`resume_offset` is install-specific, from `btrfs inspect-internal map-swapfile` — re-derive on reinstall).
 - `secure-boot.nix` — lanzaboote. **Two-phase**: keep `my.secureBoot.enable = false` for the first install, then `sbctl create-keys` → enable → `sbctl enroll-keys --microsoft` (MS keys so Windows still boots) → re-enroll TPM2 bound to the measured PCRs.
 - `backups.nix` — restic → Nextcloud over rclone WebDAV (`~/Repos`). **Gated** on the sops secrets existing (`my.backups.enable`).
 
