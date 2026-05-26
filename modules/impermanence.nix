@@ -1,7 +1,7 @@
 # Impermanence ("erase your darlings") for a BTRFS root.
 #
-# Every boot the @ subvolume is deleted and recreated from an empty @blank
-# snapshot, so / starts pristine. State survives only if it is (a) reproducible
+# Every boot the @ subvolume is moved aside (kept as @old, recoverable for one
+# boot) and recreated EMPTY, so / starts pristine. State survives only if it is (a) reproducible
 # from the flake, (b) on a non-rolled-back subvolume (/nix, /persist, /home,
 # /var/log, /var/lib/docker), or (c) listed below to be bind-mounted from
 # /persist. ROOT-ONLY scope: /home is durable, so user/app state is untouched
@@ -9,9 +9,11 @@
 #
 # GOTCHA — if it isn't reproducible and isn't listed here, IT IS GONE on reboot.
 #
-# GOTCHA — @blank must be captured EMPTY at INSTALL, after disko creates @ and
-# BEFORE nixos-install populates it (see the runbook). This module assumes it
-# exists; it does not create it.
+# NOTE — the root is recreated EMPTY with `btrfs subvolume create` each boot, so it
+# does NOT depend on an install-time @blank snapshot. (The original
+# snapshot-from-@blank approach failed: systemd's nested subvolumes under @ —
+# var/lib/{machines,portables}, /srv, /tmp, /var/tmp — blocked `btrfs subvolume
+# delete @`. @blank is now vestigial and can be removed.)
 { config, lib, pkgs, inputs, ... }:
 with lib;
 let
@@ -30,39 +32,64 @@ in {
 
   config = mkIf cfg.enable {
     boot.initrd.systemd.enable = true;
-    # Ensure btrfs-progs is in the initrd for the rollback service.
-    boot.initrd.systemd.storePaths = [ "${pkgs.btrfs-progs}/bin/btrfs" ];
+    # Put the rollback service's binaries IN the initrd image. The service `path`
+    # only sets PATH — without these actually present, `mount` was "command not
+    # found" (systemd-initrd mounts via syscalls, so it ships no mount(8)). This was
+    # the real cause of every failed rollback: the script died at `mount` on line 1.
+    boot.initrd.systemd.storePaths = [ pkgs.btrfs-progs pkgs.util-linux pkgs.coreutils ];
 
-    # Roll @ back to a pristine @blank on every boot.
+    # Reset @ to an empty subvolume on every boot (impermanence).
     #
     # GOTCHA — ORDER vs HIBERNATION. This is After= the resume service: on a
     # successful hibernate resume the kernel jumps back into the saved image
     # BEFORE this unit runs, so @ is never wiped from under a resumed session.
     # On a cold boot, resume is a no-op and the wipe proceeds.
     boot.initrd.systemd.services.rollback-root = {
-      description = "Roll back btrfs @ to @blank (impermanence: blank / on boot)";
+      description = "Reset btrfs @ to empty (impermanence: blank / on boot)";
       wantedBy = [ "initrd.target" ];
+      # Order after the LUKS device is open and after a hibernate-resume attempt,
+      # before the root mounts. The .device unit is already in the boot transaction
+      # (sysroot.mount needs it), so ordering after it makes us wait for it.
       after = [
+        "dev-mapper-cryptroot.device"
         "systemd-cryptsetup@cryptroot.service"
         "systemd-hibernate-resume.service"
       ];
       before = [ "sysroot.mount" ];
       unitConfig.DefaultDependencies = "no";
       serviceConfig.Type = "oneshot";
-      path = [ pkgs.btrfs-progs pkgs.util-linux ];
+      path = [ pkgs.btrfs-progs pkgs.util-linux pkgs.coreutils ];
       script = ''
+        # Debugging in initrd (its journal isn't forwarded on this host): prepend
+        # `exec > /dev/kmsg 2>&1`, add `echo` markers, then read them back via `dmesg`.
         mkdir -p /btrfs_tmp
         mount -t btrfs -o subvolid=5 ${cfg.device} /btrfs_tmp
 
-        # Delete any nested subvolumes under @, then @ itself.
-        if [ -e /btrfs_tmp/@ ]; then
-          btrfs subvolume list -o /btrfs_tmp/@ | cut -f9 -d' ' | while read sub; do
-            btrfs subvolume delete "/btrfs_tmp/$sub"
+        # systemd creates var/lib/{machines,portables}, /srv, /tmp, /var/tmp as
+        # subvolumes INSIDE @, so deleting @ needs those gone first. Recurse,
+        # tolerant of either path format `btrfs subvolume list -o` may emit.
+        delete_subvolume_recursively() {
+          local target="$1" child IFS
+          IFS=$'\n'
+          for child in $(btrfs subvolume list -o "$target" | cut -f9- -d' '); do
+            if btrfs subvolume show "/btrfs_tmp/$child" >/dev/null 2>&1; then
+              delete_subvolume_recursively "/btrfs_tmp/$child"
+            elif btrfs subvolume show "$target/$child" >/dev/null 2>&1; then
+              delete_subvolume_recursively "$target/$child"
+            fi
           done
-          btrfs subvolume delete /btrfs_tmp/@
-        fi
+          btrfs subvolume delete "$target"
+        }
 
-        btrfs subvolume snapshot /btrfs_tmp/@blank /btrfs_tmp/@
+        # Keep the PREVIOUS root as @old (recoverable for one boot), then boot empty.
+        if btrfs subvolume show /btrfs_tmp/@old >/dev/null 2>&1; then
+          delete_subvolume_recursively /btrfs_tmp/@old
+        fi
+        if btrfs subvolume show /btrfs_tmp/@ >/dev/null 2>&1; then
+          mv /btrfs_tmp/@ /btrfs_tmp/@old
+        fi
+        btrfs subvolume create /btrfs_tmp/@
+
         umount /btrfs_tmp
       '';
     };

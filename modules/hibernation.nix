@@ -16,18 +16,27 @@ in {
     # Resume from the swapfile on the unlocked LUKS btrfs.
     boot.resumeDevice = "/dev/mapper/cryptroot";
 
-    # GOTCHA — RESUME OFFSET. Hibernating to a btrfs swapfile needs the file's
-    # physical offset, which isn't known until disko has created the file. Compute
-    # it on the INSTALLED system and uncomment the line below, then rebuild:
-    #     sudo btrfs inspect-internal map-swapfile -r /swap/swapfile
-    # (Until this is set, hibernation will SUSPEND fine but fail to RESUME.)
-    # boot.kernelParams = [ "resume_offset=REPLACE_WITH_OFFSET" ];
+    # Resume offset of /swap/swapfile, from `btrfs inspect-internal map-swapfile`.
+    # Without it, hibernation suspends fine but fails to RESUME (cold boot on wake).
+    # Re-derive and update this if the swapfile is ever recreated.
+    boot.kernelParams = [ "resume_offset=533760" ];
 
-    # Lid/idle -> suspend to RAM, then hibernate after the delay (fully off).
+    # Lid-close behavior, by context:
+    #   battery / AC (not docked) -> suspend-then-hibernate (sleep, then hibernate
+    #     after HibernateDelaySec). AC uses this too so that closing the lid while
+    #     plugged and THEN unplugging while asleep still hibernates instead of
+    #     draining in S3 — the lid action fires once and isn't re-evaluated on a
+    #     power-source change. Cost: hibernates ~45min after lid-close even if it
+    #     stays plugged in.
+    #   docked (>1 display) -> ignore (clamshell on the Thunderbolt dock).
     services.logind.settings.Login = {
-      HandleLidSwitch = "suspend-then-hibernate";
-      HandleLidSwitchExternalPower = "suspend-then-hibernate";
+      HandleLidSwitch = "suspend-then-hibernate";              # on battery
+      HandleLidSwitchExternalPower = "suspend-then-hibernate"; # on AC: same, so unplug-while-asleep still hibernates
       HandlePowerKey = "suspend-then-hibernate";
+      # Docked = logind counts >1 connected display as docked -> ignore the lid, so
+      # closing it on the Thunderbolt dock stays awake. (systemd default; explicit
+      # here to document intent.)
+      HandleLidSwitchDocked = "ignore";
     };
     systemd.sleep.settings.Sleep.HibernateDelaySec = "45min";
   };

@@ -53,6 +53,11 @@
   networking.networkmanager.plugins = with pkgs; [ networkmanager-openconnect ];
 
   time.timeZone = "America/Los_Angeles";
+  # Dual-boot with Windows: Windows treats the RTC as local time, so match it here
+  # instead of fighting it (otherwise the clock is off by the UTC offset after
+  # switching OSes). The cleaner alternative is making Windows use UTC (the
+  # `RealTimeIsUniversal` registry DWORD), but this matches your usual approach.
+  time.hardwareClockInLocalTime = true;
   # Was commented out (defaulting to the C locale). Set it explicitly.
   i18n.defaultLocale = "en_US.UTF-8";
 
@@ -84,6 +89,18 @@
 
   nixpkgs.config.allowUnfree = true;
 
+  # Workaround: pipx 1.8.0's test suite fails on this nixpkgs pin — cosmetic
+  # package-spec normalization drift (`pkg@url` vs `pkg @ url`) in
+  # test_package_specifier.py, not a functional break — which otherwise fails the
+  # whole build. `depend` needs the pipx binary (packages.yaml data-tools block), so
+  # skip its checkPhase rather than dropping it. Remove once nixpkgs ships a fixed
+  # pipx — or migrate that block to `uv tool` (uv is already installed).
+  nixpkgs.overlays = [
+    (final: prev: {
+      pipx = prev.pipx.overridePythonAttrs (old: { doCheck = false; });
+    })
+  ];
+
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" ];
     auto-optimise-store   = true;
@@ -110,6 +127,15 @@
   # nix-index-database flake input) so it works immediately — no manual `nix-index`.
   programs.nix-index.enable = true;
   programs.nix-index-database.comma.enable = true;
+
+  # The home-manager activation runs `depend install` (packages.yaml: flatpaks,
+  # vscode extensions, pipx) on every switch. On a FRESH/impermanent install that's
+  # a multi-GB first-boot download that overran the default start timeout and got
+  # SIGTERM'd mid-install. Give it headroom — it's a one-time cost (user flatpaks
+  # then persist on /home). (A sturdier design would move `depend` into its own
+  # non-blocking oneshot service instead of the activation; this fixes the timeout.)
+  # (home-manager sets this to "5m" by default — that was the 5-minute kill.)
+  systemd.services.home-manager-chris.serviceConfig.TimeoutStartSec = lib.mkForce "30min";
 
   # NVIDIA RTX 3060 Mobile (Ampere) + Intel Tiger Lake iGPU. PRIME render offload:
   # iGPU drives the display, NVIDIA on demand via the `nvidia-offload` wrapper.
@@ -148,8 +174,14 @@
   };
   security.rtkit.enable = true;
 
+  # Declarative passwords — REQUIRED under impermanence: /etc/shadow lives on the
+  # ephemeral root, so a `passwd`-set password is wiped on every @ rollback. The
+  # hash lives in durable /persist (NOT in this repo). Create/rotate it with:
+  #     mkpasswd -m sha-512 | sudo tee /persist/passwd/chris   # then: sudo chmod 600
+  users.mutableUsers = false;
   users.users.chris = {
     isNormalUser = true;
+    hashedPasswordFile = "/persist/passwd/chris";
     # dialout = serial/UART console access (junkyard UART work, /dev/ttyUSB*).
     extraGroups = [ "wheel" "docker" "dialout" ];
   };
