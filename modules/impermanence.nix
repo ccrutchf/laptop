@@ -36,7 +36,7 @@ in {
     # only sets PATH — without these actually present, `mount` was "command not
     # found" (systemd-initrd mounts via syscalls, so it ships no mount(8)). This was
     # the real cause of every failed rollback: the script died at `mount` on line 1.
-    boot.initrd.systemd.storePaths = [ pkgs.btrfs-progs pkgs.util-linux pkgs.coreutils ];
+    boot.initrd.systemd.storePaths = [ pkgs.btrfs-progs pkgs.util-linux pkgs.coreutils pkgs.gawk ];
 
     # Reset @ to an empty subvolume on every boot (impermanence).
     #
@@ -58,7 +58,7 @@ in {
       before = [ "sysroot.mount" ];
       unitConfig.DefaultDependencies = "no";
       serviceConfig.Type = "oneshot";
-      path = [ pkgs.btrfs-progs pkgs.util-linux pkgs.coreutils ];
+      path = [ pkgs.btrfs-progs pkgs.util-linux pkgs.coreutils pkgs.gawk ];  # gawk: the rollback parses `btrfs subvolume list` with awk
       script = ''
         # Debugging in initrd (its journal isn't forwarded on this host): prepend
         # `exec > /dev/kmsg 2>&1`, add `echo` markers, then read them back via `dmesg`.
