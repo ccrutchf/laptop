@@ -67,6 +67,20 @@ in
     nix-direnv.enable = true;
   };
 
+  # Default browser = Zen (the Flatpak). Writes ~/.config/mimeapps.list, which GNOME
+  # reads for default-app associations. (home-manager owns the file as a symlink, so
+  # changing defaults via GNOME Settings later won't stick — edit it here instead.)
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "text/html" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/http" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/https" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/about" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/unknown" = "app.zen_browser.zen.desktop";
+    };
+  };
+
   gtk = {
     enable = true;
     gtk4.theme = config.gtk.theme;
