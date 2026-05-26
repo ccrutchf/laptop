@@ -9,11 +9,11 @@
 #
 # GOTCHA — if it isn't reproducible and isn't listed here, IT IS GONE on reboot.
 #
-# NOTE — the root is recreated EMPTY with `btrfs subvolume create` each boot, so it
-# does NOT depend on an install-time @blank snapshot. (The original
-# snapshot-from-@blank approach failed: systemd's nested subvolumes under @ —
-# var/lib/{machines,portables}, /srv, /tmp, /var/tmp — blocked `btrfs subvolume
-# delete @`. @blank is now vestigial and can be removed.)
+# NOTE — the root is recreated EMPTY with `btrfs subvolume create` each boot (the
+# previous root is kept as @old), so this does NOT use an install-time snapshot.
+# (An earlier snapshot-based approach failed: systemd nests subvolumes under @ —
+# var/lib/{machines,portables}, /srv, /tmp, /var/tmp — which blocked deleting @;
+# the recursive delete below handles them.)
 { config, lib, pkgs, inputs, ... }:
 with lib;
 let
@@ -71,7 +71,7 @@ in {
         delete_subvolume_recursively() {
           local target="$1" child IFS
           IFS=$'\n'
-          for child in $(btrfs subvolume list -o "$target" | cut -f9- -d' '); do
+          for child in $(btrfs subvolume list -o "$target" | awk '{i=index($0," path "); if (i) print substr($0, i+6)}'); do
             if btrfs subvolume show "/btrfs_tmp/$child" >/dev/null 2>&1; then
               delete_subvolume_recursively "/btrfs_tmp/$child"
             elif btrfs subvolume show "$target/$child" >/dev/null 2>&1; then
