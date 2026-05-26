@@ -5,7 +5,7 @@
 # TWO-PHASE. Keep `my.secureBoot.enable = false` for the FIRST install (you boot
 # with systemd-boot). Then, on the running system:
 #   1. sudo sbctl create-keys
-#   2. set my.secureBoot.enable = true; sudo nixos-rebuild switch  (signs boot files)
+#   2. set my.secureBoot.enable = true; sudo nixos-rebuild switch --flake .#chris-laptop  (signs boot files)
 #   3. reboot -> firmware -> put Secure Boot in "setup mode"
 #   4. sudo sbctl enroll-keys --microsoft   # MS keys TOO, so WINDOWS still boots
 #   5. enable Secure Boot in firmware

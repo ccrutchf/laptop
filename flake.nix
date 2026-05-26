@@ -42,7 +42,10 @@
     # The user's own non-Nix package reconciler (`depend`). Must be a flake INPUT
     # now: home.nix's old `builtins.getFlake "github:..."` is illegal in a flake's
     # pure eval, so it's referenced via inputs.dependency-manager instead.
-    dependency-manager.url = "github:ccrutchf/dependency-manager";
+    dependency-manager = {
+      url = "github:ccrutchf/dependency-manager";
+      inputs.nixpkgs.follows = "nixpkgs";  # dedupe — don't pull a 2nd nixpkgs into the lock
+    };
 
     # Prebuilt nix-index database (weekly) so `comma` / nix-locate work instantly.
     nix-index-database = {
@@ -59,8 +62,7 @@
       # inputs.impermanence.nixosModules.impermanence (mirrors krg-infra).
       specialArgs = { inherit inputs; };
       modules = [
-        ./configuration.nix
-        ./disko-config.nix
+        ./configuration.nix   # imports ./disko-config.nix + ./modules/*.nix itself
 
         disko.nixosModules.disko
         lanzaboote.nixosModules.lanzaboote

@@ -6,6 +6,7 @@
 {
   imports =
     [ ./hardware-configuration.nix
+      ./disko-config.nix
       ./modules/impermanence.nix
       ./modules/hibernation.nix
       ./modules/secure-boot.nix

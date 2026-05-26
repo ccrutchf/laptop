@@ -47,8 +47,9 @@ in
       user = {
         name = "Christopher L. Crutchfield";
         email = "ccrutchf@ucsd.edu";
-        # SSH commit signing with the Nextcloud-synced key.
-        signingkey = "~/.ssh/id_ed25519.pub";
+        # SSH commit signing with the Nextcloud-synced key. Absolute path — git does
+        # NOT expand `~` in signingkey, so a literal `~/...` fails to find the key.
+        signingkey = "${config.home.homeDirectory}/.ssh/id_ed25519.pub";
       };
       gpg.format = "ssh";
       commit.gpgsign = true;

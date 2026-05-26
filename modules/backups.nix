@@ -9,7 +9,7 @@
 # To turn on:
 #   1. ensure the Nextcloud-synced SSH key is at ~/.ssh/id_ed25519
 #   2. populate secrets/secrets.yaml (restic password + the rclone.conf) — see .sops.yaml
-#   3. set my.backups.enable = true; nixos-rebuild switch
+#   3. set my.backups.enable = true; sudo nixos-rebuild switch --flake .#chris-laptop
 { config, lib, pkgs, ... }:
 with lib;
 let
