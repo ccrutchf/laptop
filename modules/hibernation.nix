@@ -9,17 +9,27 @@ with lib;
 let
   cfg = config.my.hibernation;
 in {
-  options.my.hibernation.enable =
-    mkEnableOption "hibernation + suspend-then-hibernate";
+  options.my.hibernation = {
+    enable = mkEnableOption "hibernation + suspend-then-hibernate";
+    resumeOffset = mkOption {
+      type = types.nullOr types.int;
+      default = null;
+      description = ''
+        Physical offset of /swap/swapfile (`btrfs inspect-internal map-swapfile`).
+        INSTALL-SPECIFIC — re-derive on reinstall. The resume_offset kernel param is
+        only set when non-null; without it hibernation suspends but won't RESUME.
+      '';
+    };
+  };
 
   config = mkIf cfg.enable {
     # Resume from the swapfile on the unlocked LUKS btrfs.
     boot.resumeDevice = "/dev/mapper/cryptroot";
 
-    # Resume offset of /swap/swapfile, from `btrfs inspect-internal map-swapfile`.
-    # Without it, hibernation suspends fine but fails to RESUME (cold boot on wake).
-    # Re-derive and update this if the swapfile is ever recreated.
-    boot.kernelParams = [ "resume_offset=533760" ];
+    # resume_offset comes from the install-specific my.hibernation.resumeOffset
+    # (set in configuration.nix). Only appended when non-null.
+    boot.kernelParams = optional (cfg.resumeOffset != null)
+      "resume_offset=${toString cfg.resumeOffset}";
 
     # Lid-close behavior, by context:
     #   battery / AC (not docked) -> suspend-then-hibernate (sleep, then hibernate

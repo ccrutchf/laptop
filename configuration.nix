@@ -15,7 +15,8 @@
 
   # --- local feature toggles (see each module) ---
   my.impermanence.enable = true;   # ephemeral btrfs root + /persist
-  my.hibernation.enable  = true;   # suspend-then-hibernate (resume_offset: fill in post-install)
+  my.hibernation.enable  = true;
+  my.hibernation.resumeOffset = 533760;  # /swap/swapfile offset (btrfs inspect-internal map-swapfile); re-derive on reinstall
   my.secureBoot.enable   = false;  # PHASE 2: flip true AFTER `sbctl create-keys` (see module)
   my.backups.enable      = false;  # flip true AFTER the age key + secrets/secrets.yaml exist
 

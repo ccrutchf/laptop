@@ -69,7 +69,7 @@ sudo nixos-install --no-root-passwd --flake /path/to/repo#chris-laptop   # root 
 ```sh
 systemctl hibernate     # then power on — should RESUME, not cold-boot
 ```
-If it cold-boots, `resume_offset` is wrong — recompute in step 4.
+If it cold-boots, `resume_offset` is wrong — recompute it in step 3 and rebuild.
 
 ## 5. Secure Boot (phase 2)
 ```sh

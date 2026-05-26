@@ -47,9 +47,9 @@
                 type = "btrfs";
                 extraArgs = [ "-L" "nixos" ];
                 subvolumes = {
-                  # @ = EPHEMERAL root. Recreated from @blank every boot by
-                  # modules/impermanence.nix. Anything here that isn't in /persist
-                  # or reproducible from the flake is GONE on reboot.
+                  # @ = EPHEMERAL root. Reset to a fresh empty subvolume every boot
+                  # by modules/impermanence.nix (previous root kept as @old). Anything
+                  # here not in /persist or reproducible from the flake is GONE on reboot.
                   "@" = {
                     mountpoint = "/";
                     mountOptions = [ "compress=zstd" "noatime" ];

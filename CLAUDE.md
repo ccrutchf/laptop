@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-This is the NixOS system configuration for a single machine (`chris-laptop`, an MSI Creator 15 A11UE). It **is a flake** (`flake.nix`) tracking **`nixos-unstable`** (home-manager follows it). The disk layout is declarative via **disko** (`disko-config.nix`), and the root is **impermanent** — a btrfs `@` subvolume rolled back to an empty `@blank` snapshot every boot, with durable `/persist`, `/home`, `/nix`, `/var/log`, and `/var/lib/docker` subvolumes. It is a personal machine and is **not** part of the KastnerRG/krg-infra fleet.
+This is the NixOS system configuration for a single machine (`chris-laptop`, an MSI Creator 15 A11UE). It **is a flake** (`flake.nix`) tracking **`nixos-unstable`** (home-manager follows it). The disk layout is declarative via **disko** (`disko-config.nix`), and the root is **impermanent** — a btrfs `@` subvolume reset to empty every boot (the previous root kept as `@old`), with durable `/persist`, `/home`, `/nix`, `/var/log`, and `/var/lib/docker` subvolumes. It is a personal machine and is **not** part of the KastnerRG/krg-infra fleet.
 
 ## Commands
 

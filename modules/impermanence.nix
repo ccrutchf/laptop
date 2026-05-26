@@ -22,11 +22,11 @@ in {
   imports = [ inputs.impermanence.nixosModules.impermanence ];
 
   options.my.impermanence = {
-    enable = mkEnableOption "btrfs root rollback to @blank + /persist state";
+    enable = mkEnableOption "ephemeral btrfs root (@ reset empty each boot) + /persist state";
     device = mkOption {
       type = types.str;
       default = "/dev/mapper/cryptroot";
-      description = "The unlocked btrfs device holding @ and @blank.";
+      description = "The unlocked btrfs device holding @ (and @old).";
     };
   };
 
