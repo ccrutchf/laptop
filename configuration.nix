@@ -234,6 +234,28 @@
     fontconfig freetype
   ];
 
+  # envfs: a FUSE filesystem over /usr/bin and /bin that resolves any
+  # `/usr/bin/<tool>` / `/bin/<tool>` (and `#!/usr/bin/env <x>` shebangs) against
+  # PATH at runtime — NixOS has no FHS, so prebuilt scripts/binaries that hardcode
+  # those paths otherwise die. Complements nix-ld (loader shim for prebuilt ELFs).
+  # NOTE: the impermanence initrd reseed of /usr/bin/env (modules/impermanence.nix)
+  # is still required — it satisfies the systemd-258 PID1 /usr check before envfs's
+  # stage-2 mount is up.
+  services.envfs = {
+    enable = true;
+    # Make these resolve at /bin/<x> and /usr/bin/<x> regardless of the caller's PATH,
+    # so Bazel/kleaf actions (which run with a sanitized PATH) can exec /bin/bash and
+    # /usr/bin/env python3. Without this, envfs only resolves names on the caller's PATH,
+    # which Bazel strips per-action — the reason the kleaf build fails in a plain shell.
+    extraFallbackPathCommands = ''
+      for p in ${pkgs.bash} ${pkgs.coreutils} ${pkgs.python3} ${pkgs.perl} \
+               ${pkgs.gnused} ${pkgs.gnugrep} ${pkgs.gawk} ${pkgs.findutils} \
+               ${pkgs.gnutar} ${pkgs.gzip} ${pkgs.diffutils} ${pkgs.which}; do
+        for f in "$p"/bin/*; do ln -sfn "$f" "$out/$(basename "$f")"; done
+      done
+    '';
+  };
+
   # --- Gaming (Steam / Proton) ---
   # Native Steam — better PRIME / 32-bit / controller integration than the flatpak
   # (32-bit graphics is already enabled above). PRIME offload is made AUTOMATIC via
