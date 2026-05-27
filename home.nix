@@ -29,7 +29,7 @@ in
     gnomeExtensions.user-themes
     gnomeExtensions.desktop-icons-ng-ding
     vscode
-    warp-terminal
+    (warp-terminal.override { waylandSupport = true; })  # else winit can't dlopen libwayland → falls back to laggy XWayland
     depend
     gh
     claude-code
