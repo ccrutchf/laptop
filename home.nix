@@ -1,11 +1,10 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, inputs, ... }:
 
 let
-  # Pull `depend` from upstream's flake. Tracks master (no lockfile here since
-  # the surrounding config isn't a flake) — mirrors the home-manager fetchTarball
-  # pattern in configuration.nix.
-  depend = (builtins.getFlake "github:ccrutchf/dependency-manager")
-    .packages.${pkgs.stdenv.hostPlatform.system}.default;
+  # `depend` comes from the flake input now — builtins.getFlake of an arbitrary
+  # URL is illegal in a flake's pure eval, so it must be a declared input
+  # (flake.nix: inputs.dependency-manager).
+  depend = inputs.dependency-manager.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   # VSCode launched with --no-sandbox. Plain (non-FHS) build: the FHS wrapper
   # runs VSCode inside bubblewrap, which sets no_new_privs and blocks sudo in
@@ -30,7 +29,7 @@ in
     gnomeExtensions.user-themes
     gnomeExtensions.desktop-icons-ng-ding
     vscode
-    (pkgs.callPackage ./warp-terminal.nix { })
+    warp-terminal
     depend
     gh
     claude-code
@@ -38,17 +37,49 @@ in
     pipx
     android-studio
     keepass
+    jetbrains-toolbox  # JetBrains IDE manager; IDEs it installs run via nix-ld
   ];
 
   programs.git = {
     enable = true;
-    settings.user = {
-      name = "Christopher L. Crutchfield";
-      email = "ccrutchf@ucsd.edu";
+    lfs.enable = true;   # large files: datasets / model checkpoints (HF, LFS repos)
+    settings = {
+      user = {
+        name = "Christopher L. Crutchfield";
+        email = "ccrutchf@ucsd.edu";
+        # SSH commit signing with the Nextcloud-synced key. Absolute path — git does
+        # NOT expand `~` in signingkey, so a literal `~/...` fails to find the key.
+        signingkey = "${config.home.homeDirectory}/.ssh/id_ed25519.pub";
+      };
+      gpg.format = "ssh";
+      commit.gpgsign = true;
+      tag.gpgsign = true;
     };
   };
 
   programs.vim.enable = true;
+
+  # Per-project dev shells: auto-load each repo's flake / devShell on cd (you have
+  # project flakes, e.g. junkyard-boot-img). nix-direnv caches the shell and keeps
+  # a GC root — pairs with nix.settings.keep-outputs/keep-derivations.
+  programs.direnv = {
+    enable = true;
+    nix-direnv.enable = true;
+  };
+
+  # Default browser = Zen (the Flatpak). Writes ~/.config/mimeapps.list, which GNOME
+  # reads for default-app associations. (home-manager owns the file as a symlink, so
+  # changing defaults via GNOME Settings later won't stick — edit it here instead.)
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "text/html" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/http" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/https" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/about" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/unknown" = "app.zen_browser.zen.desktop";
+    };
+  };
 
   gtk = {
     enable = true;

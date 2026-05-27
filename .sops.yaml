@@ -1,0 +1,16 @@
+# sops creation rules — encrypts secrets/secrets.yaml to the recipients below.
+#
+# The age identity is derived from the SSH ed25519 key synced via Nextcloud
+# (ssh-to-age), so every personal machine can decrypt and a reinstall doesn't
+# lose the key. Generate the public recipient once and paste it below:
+#     ssh-to-age < ~/.ssh/id_ed25519.pub
+# then create/edit the secrets file:
+#     sops secrets/secrets.yaml
+# (add `restic/password` and `restic/rclone-conf` — see secrets/README.md.)
+keys:
+  - &chris age1REPLACE_WITH_SSH_TO_AGE_PUBKEY
+creation_rules:
+  - path_regex: secrets/secrets\.yaml$
+    key_groups:
+      - age:
+          - *chris
