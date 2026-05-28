@@ -106,6 +106,30 @@
   nixpkgs.overlays = [
     (final: prev: {
       pipx = prev.pipx.overridePythonAttrs (old: { doCheck = false; });
+
+      # envfs 1.2.0 — nixpkgs still ships 1.1.0, whose single-threaded FUSE daemon
+      # DEADLOCKS whenever a caller's PATH contains /bin or /usr/bin: it re-enters its
+      # own mount and every exec through /bin·/usr/bin then hangs in D-state
+      # (Mic92/envfs#145/#196). That froze the GNOME desktop on every wipe-enabled gen.
+      # 1.2.0 fixes it ("Avoid FUSE deadlocks by resolving paths with O_PATH fds").
+      # This is exactly nixpkgs PR #500707 (package-only bump) applied as an overlay;
+      # it stays on nixpkgs' fetchCargoVendor, which pulls crates from the
+      # static.crates.io CDN — NOT the upstream flake's importCargoLock, which 403s on
+      # crates.io's legacy /api/v1/download endpoint. Drop this once #500707 lands.
+      envfs = prev.envfs.overrideAttrs (old: rec {
+        version = "1.2.0";
+        src = final.fetchFromGitHub {
+          owner = "Mic92";
+          repo = "envfs";
+          rev = version;
+          hash = "sha256-hj/6zS9ebF0IDqgc1Dne59nWx80nk6jn2gj8BzQUFIQ=";
+        };
+        cargoDeps = final.rustPlatform.fetchCargoVendor {
+          inherit src;
+          name = "envfs-${version}-vendor";
+          hash = "sha256-dz3gpE464jnmSDsAsmJHcxUsEKeUURNoUjgGU2214Xg=";
+        };
+      });
     })
   ];
 
@@ -249,6 +273,7 @@
   # stage-2 mount is up.
   services.envfs = {
     enable = true;
+    # package comes from the overlay above (envfs 1.2.0, fixes the FUSE deadlock).
     # Make these resolve at /bin/<x> and /usr/bin/<x> regardless of the caller's PATH,
     # so Bazel/kleaf actions (which run with a sanitized PATH) can exec /bin/bash and
     # /usr/bin/env python3. Without this, envfs only resolves names on the caller's PATH,
