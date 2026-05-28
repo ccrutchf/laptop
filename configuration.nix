@@ -49,6 +49,12 @@
     options snd_hda_intel power_save=0 power_save_controller=N
   '';
 
+  # Transparent aarch64 emulation via qemu-user + binfmt_misc — required to run
+  # arm64 Debian inside systemd-nspawn for the felix/kleaf rootfs build (the
+  # debootstrap second-stage executes aarch64 binaries on this x86_64 host).
+  # Registers /proc/sys/fs/binfmt_misc/qemu-aarch64.
+  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
+
   networking.hostName = "chris-laptop";
   networking.networkmanager.enable = true;
   # openconnect plugin: AnyConnect VPN type in GNOME Settings (UCSD vpn.ucsd.edu).
