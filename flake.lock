@@ -23,11 +23,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1779247718,
-        "narHash": "sha256-lYJ1x9sTfI2590urabxZtKobWOSq2f83rSYj2pZqGY4=",
+        "lastModified": 1780066970,
+        "narHash": "sha256-cvqKCxRdVxXqEVGibuwQtj29loW6uv+4eCDBg3nDM3o=",
         "owner": "ccrutchf",
         "repo": "dependency-manager",
-        "rev": "388192f739f9c786a4e4d26afa1d2121ef3c3e02",
+        "rev": "6a443ef96a004c13fdb9e2b5567c10b73729614c",
         "type": "github"
       },
       "original": {
