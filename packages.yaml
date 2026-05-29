@@ -29,6 +29,8 @@ desktop-apps:
       source: flathub
     org.pgadmin.pgadmin4:
       source: flathub
+    com.spotify.Client:
+      source: flathub
 
 vscode-extensions:
   platform: linux
