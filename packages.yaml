@@ -44,6 +44,7 @@ vscode-extensions:
     bbenoist.nix:
     ms-vscode-remote.remote-ssh:
     ms-vscode-remote.remote-containers:
+    mkhl.direnv:
 
 data-tools:
   platform: linux
