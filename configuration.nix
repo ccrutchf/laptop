@@ -53,7 +53,12 @@
   # arm64 Debian inside systemd-nspawn for the felix/kleaf rootfs build (the
   # debootstrap second-stage executes aarch64 binaries on this x86_64 host).
   # Registers /proc/sys/fs/binfmt_misc/qemu-aarch64.
-  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
+  boot.binfmt = {
+    emulatedSystems = [ "aarch64-linux" ];
+    # Without fixBinary, qemu's interpreter path is resolved at exec time, but
+    # inside systemd-nspawn containers that /run/binfmt path doesn't exist.
+    registrations.aarch64-linux.fixBinary = true;
+  };
 
   networking.hostName = "chris-laptop";
   networking.networkmanager.enable = true;
