@@ -22,6 +22,10 @@ in
 
   programs.home-manager.enable = true;
 
+  # Lets `depend` (run from the home-manager activation hook and ad-hoc) resolve
+  # which flake+attr to operate against without passing --flake every time.
+  home.sessionVariables.DEPEND_NIXOS_FLAKE = "${config.home.homeDirectory}/Repos/personal/laptop#chris-laptop";
+
   home.packages = with pkgs; [
     yaru-theme
     gnomeExtensions.dash-to-dock
