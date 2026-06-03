@@ -22,6 +22,12 @@ in
 
   programs.home-manager.enable = true;
 
+  # Let home-manager own bash so home.sessionVariables / shellAliases actually
+  # take effect — without a managed shell, nothing sources hm-session-vars.sh and
+  # e.g. DEPEND_NIXOS_FLAKE below never reaches an interactive shell. HM's bashrc
+  # sources the system /etc/bashrc first, so the NixOS shell setup is preserved.
+  programs.bash.enable = true;
+
   # Lets `depend` (run from the home-manager activation hook and ad-hoc) resolve
   # which flake+attr to operate against without passing --flake every time.
   home.sessionVariables.DEPEND_NIXOS_FLAKE = "${config.home.homeDirectory}/Repos/personal/laptop#chris-laptop";
