@@ -220,7 +220,7 @@
     isNormalUser = true;
     hashedPasswordFile = "/persist/passwd/chris";
     # dialout = serial/UART console access (junkyard UART work, /dev/ttyUSB*).
-    extraGroups = [ "wheel" "docker" "dialout" ];
+    extraGroups = [ "wheel" "docker" "dialout" "input" ];
   };
   # No direct root login; admin via sudo (chris in wheel).
   users.users.root.hashedPassword = "!";
