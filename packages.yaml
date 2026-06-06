@@ -31,6 +31,16 @@ desktop-apps:
       source: flathub
     com.spotify.Client:
       source: flathub
+    # RDP client (FreeRDP backend) with built-in per-profile SSH-tunnel support —
+    # the "SSH Tunnel" tab tunnels the RDP session through a jump host. GNOME
+    # Connections was the alternative but has no SSH tunneling.
+    org.remmina.Remmina:
+      source: flathub
+    # Teams in a browser is gated by Microsoft (Firefox/Zen → white screen; Linux
+    # browsers can't apply video background effects). This Electron wrapper presents
+    # a real Chromium UA, so it loads and gives the best shot at background blur.
+    com.github.IsmaelMartinez.teams_for_linux:
+      source: flathub
 
 vscode-extensions:
   platform: linux
