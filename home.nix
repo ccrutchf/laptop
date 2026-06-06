@@ -33,7 +33,9 @@ in
   home.sessionVariables.DEPEND_NIXOS_FLAKE = "${config.home.homeDirectory}/Repos/personal/laptop#chris-laptop";
 
   home.packages = with pkgs; [
-    yaru-theme
+    yaru-theme            # still used for the cursor theme below
+    adwaita-icon-theme    # GNOME-default icons (reverted from Yaru)
+    gnome-themes-extra    # ships the Adwaita-dark GTK3 variant darkman switches to
     gnomeExtensions.dash-to-dock
     gnomeExtensions.appindicator
     gnomeExtensions.user-themes
@@ -106,14 +108,12 @@ in
 
   gtk = {
     enable = true;
-    gtk4.theme = config.gtk.theme;
-    theme = {
-      name = "Yaru-dark";
-      package = pkgs.yaru-theme;
-    };
+    # No static `theme` here on purpose: darkman owns gtk-theme + color-scheme at
+    # runtime (Adwaita ⇄ Adwaita-dark, see services.darkman below). Letting the gtk
+    # module pin gtk-theme would fight darkman's gsettings writes on every switch.
     iconTheme = {
-      name = "Yaru";
-      package = pkgs.yaru-theme;
+      name = "Adwaita";          # GNOME default icons (reverted from Yaru)
+      package = pkgs.adwaita-icon-theme;
     };
     cursorTheme = {
       name = "Yaru";
@@ -134,13 +134,12 @@ in
     };
 
     "org/gnome/desktop/interface" = {
-      color-scheme = "prefer-dark";
+      # color-scheme + gtk-theme are owned by darkman (runtime light/dark switch);
+      # icon-theme + cursor-theme are owned by the gtk module above. Keep only the
+      # keys nothing else manages here.
       font-name = "Ubuntu 11";
       document-font-name = "Sans 11";
       monospace-font-name = "Ubuntu Mono 13";
-      cursor-theme = "Yaru";
-      icon-theme = "Yaru";
-      gtk-theme = "Yaru-dark";
       clock-format = "12h";
     };
 
@@ -160,7 +159,7 @@ in
     };
 
     "org/gnome/shell/extensions/user-theme" = {
-      name = "Yaru-dark";
+      name = "";   # default GNOME Shell theme (reverted from Yaru-dark)
     };
 
     "org/gnome/shell/extensions/dash-to-dock" = {
@@ -172,6 +171,24 @@ in
       click-action = "minimize-or-overview";
       transparency-mode = "FIXED";
     };
+  };
+
+  # Automatic light/dark at sunrise/sunset. darkman gets location from geoclue
+  # (services.geoclue2 in configuration.nix — darkman is allowlisted there) and
+  # runs the matching script on each transition and at login. The scripts own
+  # color-scheme + gtk-theme via gsettings; nothing else writes those keys (see
+  # the dconf interface block and the gtk module above), so there's no fight.
+  services.darkman = {
+    enable = true;
+    settings.usegeoclue = true;   # no lat/lng: geoclue provides the fix
+    lightModeScripts.gnome = ''
+      ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface color-scheme 'prefer-light'
+      ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita'
+    '';
+    darkModeScripts.gnome = ''
+      ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+      ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
+    '';
   };
 
   # Reconcile non-Nix packages (flatpaks, vscode extensions, etc.) via

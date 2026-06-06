@@ -80,6 +80,23 @@
 
   services.flatpak.enable = true;
 
+  # Location service for darkman's geoclue-based sunrise/sunset (home.nix). The
+  # demo agent (enabled by default) authorizes per-user apps against appConfig
+  # below — darkman's desktop ID must be allowlisted or it gets no fix. Mozilla
+  # Location Service shut down in 2024, so point the WiFi geolocation backend at
+  # beaconDB (its community successor); without it geoclue has no network source.
+  # If geoclue ever proves flaky, drop to fixed coords: set lat/lng + usegeoclue
+  # = false in services.darkman.settings (home.nix) and disable this.
+  services.geoclue2 = {
+    enable = true;
+    geoProviderUrl = "https://beacondb.net/v1/geolocate";
+    appConfig.darkman = {
+      isAllowed = true;
+      isSystem = false;
+      users = [ "1000" ];   # chris (id -u); geoclue keys its allowlist by uid string
+    };
+  };
+
   # CUPS for campus/network printers.
   services.printing.enable = true;
 
