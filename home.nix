@@ -168,7 +168,14 @@ in
       dash-max-icon-size = 48;
       show-trash = true;
       show-mounts = true;
-      click-action = "minimize-or-overview";
+      # Always visible: pin the dock and never auto/intelli-hide it.
+      dock-fixed = true;
+      autohide = false;
+      intellihide = false;
+      # Clicking an app spreads THAT app's windows across the screen, macOS
+      # Exposé–style (instead of dumping you into the all-windows overview);
+      # single window → just focuses it.
+      click-action = "focus-or-appspread";
       transparency-mode = "FIXED";
     };
   };
