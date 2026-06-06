@@ -91,6 +91,19 @@ in
     };
   };
 
+  # synologyfuse-gui (configuration.nix systemPackages) ships no .desktop file, so
+  # GNOME's app grid wouldn't list it. Add one; `SynologyFuse.Gui` is on the system
+  # PATH (/run/current-system/sw/bin), and folder-remote is an Adwaita icon name.
+  xdg.desktopEntries.synologyfuse-gui = {
+    name = "Synology FileStation";
+    genericName = "NAS File Mounter";
+    comment = "Mount Synology NAS FileStation shares over FUSE";
+    exec = "SynologyFuse.Gui";
+    icon = "folder-remote";
+    terminal = false;
+    categories = [ "Utility" "Network" "FileTools" ];
+  };
+
   gtk = {
     enable = true;
     gtk4.theme = config.gtk.theme;

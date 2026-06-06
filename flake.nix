@@ -52,6 +52,15 @@
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # E4E Synology FileStation mounter (FUSE CLI + Avalonia GUI). Flake exposes
+    # packages.synologyfuse-gui (bundles the CLI) and .synology-filestation-fuse;
+    # pulled into environment.systemPackages in configuration.nix. No NixOS module,
+    # so it also needs programs.fuse.userAllowOther there for non-root mounts.
+    synology-filestation = {
+      url = "github:UCSD-E4E/synology-filestation";
+      inputs.nixpkgs.follows = "nixpkgs";  # dedupe — don't drag in a 2nd nixpkgs
+    };
   };
 
   outputs = { self, nixpkgs, home-manager, disko, lanzaboote, sops-nix, ... }@inputs:

@@ -317,7 +317,21 @@
   };
   programs.gamemode.enable = true;    # CPU governor/scheduling boost (gamemoderun)
 
-  environment.systemPackages = with pkgs; [
+  # E4E Synology FileStation FUSE mounter — non-root mounts need user_allow_other
+  # in /etc/fuse.conf, which this option writes. (No NixOS module ships with the
+  # flake; the package itself is added to systemPackages below.)
+  programs.fuse.userAllowOther = true;
+
+  # E4E Synology FileStation (flake input). The Avalonia GUI (`SynologyFuse.Gui`)
+  # shells out to the `synology-filestation-fuse` CLI via PATH — in the Nix layout
+  # the CLI is a SEPARATE package, not bundled beside the GUI, so BOTH must be on
+  # PATH or mounting silently can't start. A home-manager desktop entry (home.nix)
+  # makes the GUI show up in the GNOME app grid (the package ships no .desktop).
+  environment.systemPackages =
+    (with inputs.synology-filestation.packages.${pkgs.stdenv.hostPlatform.system}; [
+      synologyfuse-gui
+      synology-filestation-fuse
+    ]) ++ (with pkgs; [
     cudatoolkit       # nvcc + CUDA libraries on PATH
     pciutils          # lspci
     android-tools     # adb + fastboot
@@ -329,7 +343,7 @@
     nvtopPackages.nvidia # GPU utilization monitor (training/inference)
     tio               # serial terminal for UART console work (junkyard etc.)
     alvr              # SteamVR->Quest streaming, fallback VR path (opens its own LAN ports at runtime)
-  ];
+  ]);
 
   networking.firewall.enable = true;
 
