@@ -1,0 +1,107 @@
+% Hyprland keybind cheat-sheet for chris-laptop — printable one-pager.
+% Build:  pdflatex hyprland-cheatsheet.tex   (or: tectonic hyprland-cheatsheet.tex)
+% Source of truth for the binds: home-hyprland.nix (keep in sync if you edit binds).
+\documentclass[10pt]{article}
+
+\usepackage[a4paper,margin=1.3cm]{geometry}
+\usepackage{multicol}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{parskip}
+\pagestyle{empty}
+\setlength{\columnsep}{1.2cm}
+
+\definecolor{accent}{HTML}{585B70}
+\definecolor{keybg}{HTML}{EEEEEE}
+\definecolor{keybd}{HTML}{999999}
+\definecolor{rule}{HTML}{CCCCCC}
+
+% A keycap.
+\newcommand{\key}[1]{\fcolorbox{keybd}{keybg}{\strut\,\texttt{\footnotesize #1}\,}}
+% +
+\newcommand{\plus}{\,\textbf{+}\,}
+% A binding row: keys ... description
+\newcommand{\bind}[2]{\noindent #1 \dotfill {\small #2}\par\vspace{2pt}}
+% A section heading.
+\newcommand{\heading}[1]{\vspace{6pt}{\bfseries\color{accent}\large #1}\par
+  {\color{rule}\rule{\linewidth}{0.6pt}}\par\vspace{3pt}}
+
+\begin{document}
+
+\begin{center}
+  {\Large\bfseries Hyprland Cheat-Sheet}\quad
+  {\color{accent}\small chris-laptop}\\[2pt]
+  {\footnotesize \key{Super} = the Windows / Super key}
+\end{center}
+\vspace{2pt}
+
+\begin{multicols}{2}
+
+\heading{Apps \& Session}
+\bind{\key{Super}\plus\key{Return}}{Terminal (kitty)}
+\bind{\key{Alt}\plus\key{Space}}{App launcher (wofi)}
+\bind{\key{Super}\plus\key{D}}{App launcher (alt)}
+\bind{\key{Super}\plus\key{W}}{Close focused window}
+\bind{\key{Super}\plus\key{L}}{Lock screen}
+\bind{\key{Super}\plus\key{M}}{Exit Hyprland (to login)}
+
+\heading{Window Control}
+\bind{\key{Super}\plus\key{V}}{Toggle floating}
+\bind{\key{Super}\plus\key{F}}{Fullscreen}
+\bind{\key{Super}\plus\key{P}}{Pseudo-tile}
+\bind{\key{Super}\plus\key{J}}{Toggle split direction}
+\bind{\key{Super}\plus\key{$\leftarrow\uparrow\downarrow\rightarrow$}}{Move focus}
+\bind{\key{Super}\plus\key{Shift}\plus\key{$\leftarrow\rightarrow$}}{Move window in layout}
+\bind{\key{Super}\plus\textit{drag} L/R mouse}{Move / resize window}
+
+\heading{Workspaces \& Monitors}
+\bind{\key{Super}\plus\key{1}\,\ldots\,\key{0}}{Switch to workspace 1--10}
+\bind{\key{Super}\plus\key{Shift}\plus\key{1\ldots0}}{Send window to workspace}
+\bind{\key{Super}\plus\key{Ctrl}\plus\key{$\leftarrow\uparrow\downarrow\rightarrow$}}{Move workspace to that monitor}
+\bind{\key{Super}\plus\key{S}}{Toggle chat scratchpad}
+\bind{\key{Super}\plus\key{Shift}\plus\key{M}}{Re-run monitor setup (4K fix)}
+
+\heading{Media \& Capture}
+\bind{\key{Print}}{Region screenshot $\rightarrow$ clipboard}
+\bind{\key{Vol $\pm$} / \key{Mute}}{Volume (wpctl)}
+\bind{\key{Bright $\pm$}}{Backlight (brightnessctl)}
+
+\columnbreak
+
+\heading{Layout Notes}
+\begin{itemize}[leftmargin=1.1em,itemsep=2pt,topsep=0pt]
+  \item \textbf{Workspace 1} lives on the 4K, \textbf{2} on the 1080p; the rest float.
+  \item Undock $\rightarrow$ pinned workspaces collapse to the laptop; re-dock $\rightarrow$ they snap back.
+  \item Lid closed while docked $=$ clamshell (internal panel off, stays awake).
+  \item Chat apps (Slack/Discord/Signal/Teams) open on the \key{Super}\plus\key{S} scratchpad.
+\end{itemize}
+
+\heading{Handy Commands}
+{\footnotesize\ttfamily
+hyprctl reload\\
+\hspace*{1em}{\rmfamily reload config}\\[3pt]
+hyprctl monitors\\
+\hspace*{1em}{\rmfamily list monitors / names}\\[3pt]
+hyprctl clients\\
+\hspace*{1em}{\rmfamily list windows (find class/title)}\\[3pt]
+hyprctl dispatch \textbackslash\\
+\hspace*{1em}movecurrentworkspacetomonitor r\\
+\hspace*{1em}{\rmfamily move active ws right}\\[3pt]
+}
+
+\heading{Apply Config Changes}
+{\footnotesize\ttfamily
+cd \textasciitilde/Repos/personal/laptop\\[2pt]
+sudo nixos-rebuild switch \textbackslash\\
+\hspace*{1em}--flake .\#chris-laptop\\[3pt]
+{\rmfamily then, for keybinds/scripts:}\\
+hyprctl reload\\[3pt]
+{\rmfamily monitor/scaling changes: prefer}\\
+{\rmfamily a clean reboot over a reload.}\\
+}
+
+\vfill
+{\footnotesize\color{accent}Binds defined in \texttt{home-hyprland.nix}.}
+
+\end{multicols}
+\end{document}
