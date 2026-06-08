@@ -106,6 +106,21 @@
   # Intel thermal management (Tiger Lake-H + RTX 3060 in a 15" chassis).
   services.thermald.enable = true;
 
+  # Thunderbolt dock fix. The Tiger Lake-H TB4 NHI (8086:9a21) has buggy
+  # firmware: ~15s after the controller goes idle the kernel runtime-suspends
+  # it, the firmware times out (nhi_runtime_suspend -> -110), and the device
+  # drops into PM "error" — after which it can no longer enumerate a dock, even
+  # on a fresh boot before anything is plugged in (the controller wedges itself
+  # from idle, NOT from system sleep). Symptom: dock/external displays/USB hub
+  # simply never appear; dmesg shows "failed to send driver ready to ICM" and
+  # "Cannot enable. Maybe the USB cable is bad?". Pin the NHI always-on so it
+  # never attempts the broken runtime-suspend. (System suspend/hibernate WHILE
+  # docked is a separate path — the logind lid matrix in hibernation.nix already
+  # avoids sleeping when docked.)
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x9a21", ATTR{power/control}="on"
+  '';
+
   # Firmware updates via LVFS (SSD/Thunderbolt/peripherals; MSI BIOS coverage is thin).
   services.fwupd.enable = true;
 
