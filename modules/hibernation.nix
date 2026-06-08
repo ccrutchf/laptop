@@ -40,13 +40,18 @@ in {
     #     stays plugged in.
     #   docked (>1 display) -> ignore (clamshell on the Thunderbolt dock).
     services.logind.settings.Login = {
-      HandleLidSwitch = "suspend-then-hibernate";              # on battery
-      HandleLidSwitchExternalPower = "suspend-then-hibernate"; # on AC: same, so unplug-while-asleep still hibernates
-      HandlePowerKey = "suspend-then-hibernate";
-      # Docked = logind counts >1 connected display as docked -> ignore the lid, so
-      # closing it on the Thunderbolt dock stays awake. (systemd default; explicit
-      # here to document intent.)
+      # Lid handling is delegated to the compositor (home-hyprland.nix: lidClose),
+      # NOT logind. logind's "docked" detection is unreliable under Hyprland — it
+      # fired suspend-then-hibernate on lid-close while docked (despite
+      # HandleLidSwitchDocked = ignore), which wedges the Thunderbolt controller.
+      # Hyprland reads the DRM connectors directly and only suspends when undocked.
+      # (If GNOME is ever restored, GNOME handles the lid via its own inhibitor, so
+      # "ignore" here is fine for both.)
+      HandleLidSwitch = "ignore";
+      HandleLidSwitchExternalPower = "ignore";
       HandleLidSwitchDocked = "ignore";
+      # Power key remains an explicit, deliberate sleep request.
+      HandlePowerKey = "suspend-then-hibernate";
     };
     systemd.sleep.settings.Sleep.HibernateDelaySec = "45min";
   };

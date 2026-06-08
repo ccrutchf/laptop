@@ -14,6 +14,11 @@ let
   vscode = pkgs.vscode.override { commandLineArgs = "--no-sandbox"; };
 in
 {
+  # Hyprland session config (keybinds, bar, launcher, autostarted helpers). Kept
+  # out of this file to avoid bloat; see home-hyprland.nix. System half is
+  # modules/hyprland.nix (gated on my.hyprland.enable in configuration.nix).
+  imports = [ ./home-hyprland.nix ];
+
   home.username = "chris";
   home.homeDirectory = "/home/chris";
 
@@ -50,6 +55,7 @@ in
     android-studio
     keepass
     jetbrains-toolbox  # JetBrains IDE manager; IDEs it installs run via nix-ld
+    papers             # GNOME Document Viewer (ex-Evince) — PDF reader
   ];
 
   programs.git = {
@@ -90,6 +96,7 @@ in
       "x-scheme-handler/https" = "app.zen_browser.zen.desktop";
       "x-scheme-handler/about" = "app.zen_browser.zen.desktop";
       "x-scheme-handler/unknown" = "app.zen_browser.zen.desktop";
+      "application/pdf" = "org.gnome.Papers.desktop";
     };
   };
 

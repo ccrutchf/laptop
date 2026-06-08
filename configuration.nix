@@ -11,6 +11,7 @@
       ./modules/hibernation.nix
       ./modules/secure-boot.nix
       ./modules/backups.nix
+      ./modules/hyprland.nix
     ];
 
   # --- local feature toggles (see each module) ---
@@ -19,6 +20,7 @@
   my.hibernation.resumeOffset = 533760;  # /swap/swapfile offset (btrfs inspect-internal map-swapfile); re-derive on reinstall
   my.secureBoot.enable   = false;  # PHASE 2: flip true AFTER `sbctl create-keys` (see module)
   my.backups.enable      = false;  # flip true AFTER the age key + secrets/secrets.yaml exist
+  my.hyprland.enable     = true;   # Hyprland session selectable at GDM (GNOME stays the default)
 
   # Boot loader. systemd-boot by default; modules/secure-boot.nix replaces it with
   # lanzaboote (signed) once my.secureBoot.enable = true.
@@ -74,9 +76,42 @@
   # Was commented out (defaulting to the C locale). Set it explicitly.
   i18n.defaultLocale = "en_US.UTF-8";
 
+  # X infrastructure kept for the NVIDIA driver config (videoDrivers below) and
+  # XWayland. No X *session* is used — the desktop is Hyprland on Wayland.
   services.xserver.enable = true;
-  services.displayManager.gdm.enable = true;
-  services.desktopManager.gnome.enable = true;
+
+  # GNOME + GDM removed for now (going Hyprland-only). GDM's Wayland greeter on
+  # NVIDIA left a stuck cursor that Hyprland couldn't clear, and GNOME 50 no
+  # longer allows an X11 greeter — so we drop GDM entirely. Re-enable these two
+  # lines to bring GNOME back.
+  # services.displayManager.gdm.enable = true;
+  # services.desktopManager.gnome.enable = true;
+
+  # File manager: Thunar (XFCE). Replaces GNOME Files now that GNOME is gone.
+  # The NixOS module wires up the D-Bus side Thunar needs to be fully featured:
+  #   - gvfs    -> trash, network shares, and auto-mounting removable drives
+  #   - tumbler -> thumbnails for images/PDFs/video
+  #   - plugins -> archive extract/create (right-click) + removable-media handling
+  programs.thunar = {
+    enable = true;
+    plugins = with pkgs.xfce; [ thunar-archive-plugin thunar-volman ];
+  };
+  services.gvfs.enable = true;
+  services.tumbler.enable = true;
+
+  # Login greeter: greetd + tuigreet. A clean console (KMS) login that launches
+  # Hyprland via its `start-hyprland` session wrapper. Chosen over graphical
+  # Wayland greeters because those run a compositor on NVIDIA, which both (a) left
+  # a stuck cursor handed off to Hyprland (GDM) and (b) hit cage's multi-monitor
+  # limits — greeter on the wrong screen, cut off (ReGreet). tuigreet runs no
+  # compositor, so neither problem can occur, and it lands you straight in Hyprland.
+  services.greetd = {
+    enable = true;
+    settings.default_session = {
+      command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --asterisks --cmd start-hyprland";
+      user = "greeter";
+    };
+  };
 
   services.flatpak.enable = true;
 
