@@ -99,19 +99,77 @@
   services.gvfs.enable = true;
   services.tumbler.enable = true;
 
-  # Login greeter: greetd + tuigreet. A clean console (KMS) login that launches
-  # Hyprland via its `start-hyprland` session wrapper. Chosen over graphical
-  # Wayland greeters because those run a compositor on NVIDIA, which both (a) left
-  # a stuck cursor handed off to Hyprland (GDM) and (b) hit cage's multi-monitor
-  # limits — greeter on the wrong screen, cut off (ReGreet). tuigreet runs no
-  # compositor, so neither problem can occur, and it lands you straight in Hyprland.
-  services.greetd = {
+  # Login greeter: greetd + ReGreet, run INSIDE a dedicated Hyprland instance.
+  #
+  # History: the earlier graphical attempts failed for compositor-specific
+  # reasons — GDM left a stuck cursor handed off to Hyprland (NVIDIA), and
+  # ReGreet-in-cage hit cage's multi-monitor limits (greeter on the wrong screen,
+  # cut off). We fell back to tuigreet (no compositor, so neither bug applies).
+  # This setup keeps the graphical greeter but uses HYPRLAND as ReGreet's host
+  # compositor instead of cage: monitor placement/scaling is controlled by the
+  # same `monitor =` config the user session uses (fixing the cut-off/wrong-screen
+  # problem), and the stuck-cursor bug was GDM-specific — it can't occur when the
+  # greeter compositor IS Hyprland (Hyprland renders on the Intel iGPU).
+  #
+  # The greeter Hyprland runs `regreet` and exits (`hyprctl dispatch exit`) when
+  # ReGreet hands control to greetd; greetd then starts the chosen session
+  # (start-hyprland, from the wayland-sessions entry registered below). ReGreet
+  # itself (theme/background/sessions) is configured via programs.regreet.
+  services.greetd = let
+    hypr = config.programs.hyprland.package;   # same Hyprland as the user session
+    regreetExe = lib.getExe config.programs.regreet.package;
+    # Greeter compositor config. Mirrors the user session's per-monitor layout
+    # (home-hyprland.nix) so ReGreet lands on the 4K at the right scale when
+    # docked; falls through to the laptop panel when undocked. Kept minimal —
+    # no bar/wallpaper daemons, just place monitors and run ReGreet.
+    greeterConfig = pkgs.writeText "greetd-hyprland.conf" ''
+      monitor = desc:Samsung Electric Company LU28R55 HCJW902122, preferred, 0x0, 1.25
+      monitor = desc:Dell Inc. DELL E2318HR 5JDGK74BAJFL, preferred, 3072x0, 1
+      monitor = eDP-1, preferred, auto, 1.5
+      monitor = , preferred, auto, 1
+
+      input { numlock_by_default = true }
+      cursor { no_hardware_cursors = true }
+      animations { enabled = false }
+      misc {
+        disable_hyprland_logo = true
+        disable_splash_rendering = true
+      }
+
+      # Clamshell (don't draw the greeter on a closed internal panel), prefer the
+      # 4K when docked, run ReGreet, then exit Hyprland so greetd starts the
+      # selected session. Each step is a no-op if its monitor is absent (undocked).
+      exec-once = ${pkgs.bash}/bin/sh -c '${pkgs.gnugrep}/bin/grep -qil closed /proc/acpi/button/lid/*/state && ${hypr}/bin/hyprctl keyword monitor eDP-1,disable; ${hypr}/bin/hyprctl dispatch focusmonitor "desc:Samsung Electric Company LU28R55 HCJW902122"; ${regreetExe}; ${hypr}/bin/hyprctl dispatch exit'
+    '';
+  in {
     enable = true;
+    # Launch via the `start-hyprland` watchdog wrapper, NOT the raw `Hyprland`
+    # binary — Hyprland 0.55 refuses to start when invoked directly. Args after
+    # `--` are forwarded to Hyprland (`--config FILE`).
     settings.default_session = {
-      command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --asterisks --cmd start-hyprland";
+      command = "${pkgs.dbus}/bin/dbus-run-session ${hypr}/bin/start-hyprland -- --config ${greeterConfig}";
       user = "greeter";
     };
   };
+
+  # Graphical greeter (ReGreet). The greetd command above launches it inside
+  # Hyprland (overriding the module's default cage command). theme/font default
+  # to Adwaita/Cantarell; background matches the desktop wallpaper for continuity.
+  programs.regreet = {
+    enable = true;
+    settings = {
+      background = {
+        path = pkgs.nixos-artwork.wallpapers.simple-dark-gray.gnomeFilePath;
+        fit = "Cover";
+      };
+      GTK.application_prefer_dark_theme = true;
+    };
+  };
+
+  # ReGreet lists sessions from the wayland-sessions desktop files in XDG_DATA_DIRS.
+  # Dropping GDM removed the display manager that used to register them, leaving the
+  # list empty — so register Hyprland's session entry (Exec=start-hyprland) here.
+  services.displayManager.sessionPackages = [ pkgs.hyprland ];
 
   services.flatpak.enable = true;
 
