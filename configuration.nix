@@ -192,9 +192,41 @@
 
   # CUPS for campus/network printers.
   services.printing.enable = true;
+  # brlaser is the de-facto driver for the Brother HL-L2370DW. Bundling the PPD
+  # here means lpadmin can build the queue WITHOUT the printer being online at
+  # switch time (unlike driverless "everywhere", which queries the device).
+  services.printing.drivers = [ pkgs.brlaser ];
+
+  # mDNS so the printer stays reachable by name across DHCP lease changes.
+  # The HL-L2370DW is on DHCP, so we address it by its stable node name
+  # (BRNxxxx.local) instead of an IP. nssmdns4 wires Avahi into NSS so CUPS /
+  # getent resolve *.local; openFirewall lets the 5353/udp replies back in.
+  services.avahi = {
+    enable = true;
+    nssmdns4 = true;
+    openFirewall = true;
+  };
+
+  # Brother HL-L2370DW, declared so it survives the impermanent-root wipe
+  # (/etc/cups and /var/lib/cups are NOT in the persist list). Node name found
+  # via `avahi-browse -rt _ipp._tcp`; brl2370d.ppd is brlaser's HL-L2370DN PPD,
+  # same engine as the DW (DN/DW differ only in ethernet vs wifi).
+  hardware.printers.ensureDefaultPrinter = "Brother_HL_L2370DW";
+  hardware.printers.ensurePrinters = [{
+    name = "Brother_HL_L2370DW";
+    location = "home";
+    deviceUri = "ipp://BRNB42200021209.local/ipp/print";
+    model = "drv:///brlaser.drv/brl2370d.ppd";
+  }];
 
   # Bluetooth (controller present). Pinned explicitly so the flake owns it.
   hardware.bluetooth.enable = true;
+  # xpadneo: out-of-tree driver for Xbox One/Series controllers over Bluetooth.
+  # Adds rumble + battery reporting and disables BT ERTM (the Enhanced Re-
+  # Transmission Mode Xbox pads choke on when pairing). Pairing keys land in
+  # /var/lib/bluetooth, which is already a persist bind, so a paired controller
+  # survives the impermanent-root wipe. (USB needs nothing — xpad is in-kernel.)
+  hardware.xpadneo.enable = true;
 
   # Intel thermal management (Tiger Lake-H + RTX 3060 in a 15" chassis).
   services.thermald.enable = true;
