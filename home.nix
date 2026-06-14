@@ -31,7 +31,7 @@ in
   # take effect — without a managed shell, nothing sources hm-session-vars.sh and
   # e.g. DEPEND_NIXOS_FLAKE below never reaches an interactive shell. HM's bashrc
   # sources the system /etc/bashrc first, so the NixOS shell setup is preserved.
-  # Kept enabled even though fish is the login shell now: it's the scripting
+  # Kept enabled even though zsh is the login shell now: it's the scripting
   # fallback, and HM still wants an owned bash for non-interactive sourcing.
   programs.bash.enable = true;
 
