@@ -17,7 +17,7 @@ in
   # Hyprland session config (keybinds, bar, launcher, autostarted helpers). Kept
   # out of this file to avoid bloat; see home-hyprland.nix. System half is
   # modules/hyprland.nix (gated on my.hyprland.enable in configuration.nix).
-  imports = [ ./home-hyprland.nix ];
+  imports = [ ./home-hyprland.nix ./home-claude-backup.nix ];
 
   home.username = "chris";
   home.homeDirectory = "/home/chris";
