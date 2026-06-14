@@ -177,11 +177,11 @@ in
 
   # Unified cursor: sets the theme + size everywhere at once (GTK, the XCURSOR_*
   # env vars for Wayland and X11/XWayland apps, and hyprcursor) instead of just
-  # GTK. Bumped to 32px (default 24) for visibility.
+  # GTK.
   home.pointerCursor = {
     name = "Yaru";
     package = pkgs.yaru-theme;
-    size = 32;
+    size = 24;
     gtk.enable = true;   # replaces the old gtk.cursorTheme block
     x11.enable = true;   # exports XCURSOR_* for XWayland apps
   };
