@@ -31,7 +31,59 @@ in
   # take effect — without a managed shell, nothing sources hm-session-vars.sh and
   # e.g. DEPEND_NIXOS_FLAKE below never reaches an interactive shell. HM's bashrc
   # sources the system /etc/bashrc first, so the NixOS shell setup is preserved.
+  # Kept enabled even though fish is the login shell now: it's the scripting
+  # fallback, and HM still wants an owned bash for non-interactive sourcing.
   programs.bash.enable = true;
+
+  # ── Interactive shell experience (the "Warp feel" without Warp) ──────────────
+  # Login shell is zsh (set in configuration.nix: programs.zsh.enable +
+  # users.users.chris.shell). zsh stays POSIX — bash one-liners and pasted
+  # snippets just work, so muscle memory carries over to client machines — while
+  # the two plugins below add the fish-style niceties: inline autosuggestions and
+  # command syntax highlighting. Completion is on by default (enableCompletion).
+  # HM propagates home.sessionVariables to zsh, so DEPEND_NIXOS_FLAKE still lands.
+  programs.zsh = {
+    enable = true;
+    autosuggestion.enable = true;
+    syntaxHighlighting.enable = true;
+    autocd = true;                       # `..`/dirname alone cd's into it
+    history = {
+      size = 100000;
+      save = 100000;
+      ignoreDups = true;
+      ignoreSpace = true;                # leading-space commands skip history
+      share = true;                      # one history across all sessions
+    };
+  };
+
+  # atuin: full-screen fuzzy/searchable command history on Ctrl-R (the Warp
+  # history-palette equivalent). --disable-up-arrow leaves Up bound to zsh's own
+  # line-history so muscle memory is intact; atuin owns Ctrl-R only.
+  programs.atuin = {
+    enable = true;
+    enableZshIntegration = true;
+    flags = [ "--disable-up-arrow" ];
+    settings = {
+      style = "compact";
+      inline_height = 25;
+      show_preview = true;
+    };
+  };
+
+  # Prompt polish, smart cd, and fuzzy finding — the rest of the modern-shell feel.
+  programs.starship = {
+    enable = true;
+    enableZshIntegration = true;
+  };
+  programs.zoxide = {
+    enable = true;
+    enableZshIntegration = true;
+    options = [ "--cmd cd" ];   # `cd` becomes zoxide (jump to frecent dirs)
+  };
+  programs.fzf = {
+    enable = true;
+    enableZshIntegration = true;
+  };
 
   # Lets `depend` (run from the home-manager activation hook and ad-hoc) resolve
   # which flake+attr to operate against without passing --flake every time.

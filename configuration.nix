@@ -419,10 +419,17 @@
   # ephemeral root, so a `passwd`-set password is wiped on every @ rollback. The
   # hash lives in durable /persist (NOT in this repo). Create/rotate it with:
   #     mkpasswd -m sha-512 | sudo tee /persist/passwd/chris   # then: sudo chmod 600
+  # zsh is the interactive login shell (see home.nix for the zsh/atuin/starship
+  # stack) — chosen over fish to keep POSIX muscle memory intact for tech-support
+  # work on other people's machines, and to match the Mac. System-level enable
+  # registers it in /etc/shells; the per-user config lives in home-manager.
+  programs.zsh.enable = true;
+
   users.mutableUsers = false;
   users.users.chris = {
     isNormalUser = true;
     hashedPasswordFile = "/persist/passwd/chris";
+    shell = pkgs.zsh;
     # dialout = serial/UART console access (junkyard UART work, /dev/ttyUSB*).
     extraGroups = [ "wheel" "docker" "dialout" "input" ];
   };
