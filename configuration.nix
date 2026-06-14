@@ -249,6 +249,23 @@
   # Firmware updates via LVFS (SSD/Thunderbolt/peripherals; MSI BIOS coverage is thin).
   services.fwupd.enable = true;
 
+  # fwupd-refresh.service (the LVFS metadata timer) runs headless as the
+  # `fwupd-refresh` system user, which has no login session — so polkit scores it
+  # as "any" and the refresh-remote action defaults to auth_admin, failing with
+  # "Failed to obtain auth". Upstream fwupd ships a JS rule granting this user a
+  # pass, but NixOS's polkit only reads /etc/polkit-1/rules.d + polkit's own dir,
+  # never fwupd's package dir, so that rule never loads. Re-add it here.
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if ((action.id == "org.freedesktop.fwupd.refresh-remote" ||
+           action.id == "org.freedesktop.fwupd.get-remotes" ||
+           action.id == "org.freedesktop.fwupd.update-metadata") &&
+          subject.user == "fwupd-refresh") {
+        return polkit.Result.YES;
+      }
+    });
+  '';
+
   # Periodic SSD TRIM (carried forward, now explicit) + btrfs scrub (bit-rot scan).
   services.fstrim.enable = true;
   services.btrfs.autoScrub = {
