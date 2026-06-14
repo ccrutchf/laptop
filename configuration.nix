@@ -375,7 +375,37 @@
     };
   };
 
-  fonts.packages = with pkgs; [ ubuntu-classic ];
+  fonts = {
+    # JetBrainsMono Nerd Font + font-awesome are added by modules/hyprland.nix
+    # (fonts.packages merges across modules). ubuntu-classic ships the Ubuntu /
+    # Ubuntu Mono families; Noto gives broad Unicode + a real serif; liberation
+    # covers the Arial/Times/Courier metric-compatible aliases documents expect.
+    packages = with pkgs; [
+      ubuntu-classic
+      noto-fonts
+      noto-fonts-color-emoji
+      liberation_ttf
+    ];
+
+    fontconfig = {
+      # The bare NixOS fallback is DejaVu — high-contrast and crunchy, and it's
+      # what non-GTK apps reach for with no defaultFonts set. Pin the smoother
+      # Ubuntu family as the sans default and JetBrainsMono Nerd Font for mono
+      # (consistent with the terminal/Waybar and carries glyphs).
+      defaultFonts = {
+        sansSerif = [ "Ubuntu" "Noto Sans" ];
+        serif     = [ "Noto Serif" ];
+        monospace = [ "JetBrainsMono Nerd Font" "Ubuntu Mono" ];
+        emoji     = [ "Noto Color Emoji" ];
+      };
+      # Fractional Wayland scaling (1.25 / 1.5, see home-hyprland.nix) rasterizes
+      # then downscales, so LCD subpixel order no longer aligns with the panel —
+      # keep grayscale AA + slight hinting, NOT rgb subpixel (which fringes here).
+      antialias = true;
+      hinting = { enable = true; style = "slight"; };
+      subpixel.rgba = "none";
+    };
+  };
 
   services.pipewire = {
     enable = true;
