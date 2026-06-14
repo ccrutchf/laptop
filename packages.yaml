@@ -31,6 +31,8 @@ desktop-apps:
       source: flathub
     com.spotify.Client:
       source: flathub
+    com.onepassword.OnePassword:
+      source: flathub
     # RDP client (FreeRDP backend) with built-in per-profile SSH-tunnel support —
     # the "SSH Tunnel" tab tunnels the RDP session through a jump host. GNOME
     # Connections was the alternative but has no SSH tunneling.
@@ -40,6 +42,11 @@ desktop-apps:
     # browsers can't apply video background effects). This Electron wrapper presents
     # a real Chromium UA, so it loads and gives the best shot at background blur.
     com.github.IsmaelMartinez.teams_for_linux:
+      source: flathub
+    # N64 emulator (the renamed successor to simple64, same dev). High
+    # compatibility (ParaLLEl RDP) with built-in gamepad auto-config, so the
+    # Xbox controller works out of the box.
+    io.github.gopher64.gopher64:
       source: flathub
 
 vscode-extensions:
