@@ -16,6 +16,10 @@ let
   depend = inputs.dependency-manager.packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
+  # Cross-platform helpers shared by both hosts (claude-backup picks systemd vs
+  # launchd internally based on the platform).
+  imports = [ ./claude-backup.nix ];
+
   home.username = "chris";
 
   # Must match system.stateVersion (configuration.nix) / the darwin host on first
