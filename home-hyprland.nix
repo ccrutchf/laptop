@@ -8,16 +8,45 @@
 # them to the Hyprland session. The HM modules below are used only to GENERATE
 # config / install binaries (waybar has systemd.enable = false for this reason).
 #
-# Basic, first-time-tiling setup: kitty (terminal), wofi (launcher), Waybar
+# Basic, first-time-tiling setup: ghostty (terminal), wofi (launcher), Waybar
 # (bar), mako (notifications), hyprpaper (wallpaper), hyprlock + hypridle
 # (lock + idle). Swap the wallpaper by editing hyprpaper.conf below.
 { config, lib, pkgs, ... }:
 
 let
   # nixos-artwork wallpapers expose a direct file path via .gnomeFilePath —
-  # handy since hyprpaper wants an exact file, not a store dir. Swap this for any
-  # image path (e.g. one in ~/Pictures) to change the wallpaper.
+  # handy since this wants an exact file, not a store dir. Used only for the
+  # hyprlock lock-screen background now; the DESKTOP wallpaper is the swww
+  # slideshow below.
   wallpaper = pkgs.nixos-artwork.wallpapers.simple-dark-gray.gnomeFilePath;
+
+  # Desktop wallpaper slideshow (GNOME-style). hyprpaper is static and can't
+  # cycle, so we use swww — a daemon with crossfade transitions — and rotate it
+  # from this loop. Drop .jpg/.jpeg/.png files into wallpaperDir; one is picked
+  # at random every slideshowInterval seconds. Scoped to Hyprland via exec-once
+  # (see header note); the script starts the daemon itself and waits for it, so
+  # there's no startup ordering race with a separate exec-once entry.
+  #
+  # NOTE ON NAMES: upstream renamed this project swww -> awww ("An Answer to your
+  # Wayland Wallpaper Woes"); in nixpkgs `pkgs.swww` is now a deprecation alias
+  # for `pkgs.awww`, and the binaries are `awww`/`awww-daemon` (no `swww` on
+  # PATH). We use the canonical `pkgs.awww` attr to avoid the rename warning.
+  wallpaperDir = "${config.home.homeDirectory}/Pictures/wallpapers_4k/ffmpeg_target";
+  slideshowInterval = 1800;   # 30 min
+  wallpaperSlideshow = pkgs.writeShellScript "hypr-wallpaper-slideshow" ''
+    dir="${wallpaperDir}"
+    # Start the daemon if not already up, then block until it answers IPC.
+    ${pkgs.awww}/bin/awww query >/dev/null 2>&1 || ${pkgs.awww}/bin/awww-daemon &
+    until ${pkgs.awww}/bin/awww query >/dev/null 2>&1; do sleep 0.2; done
+    while true; do
+      img=$(${pkgs.findutils}/bin/find "$dir" -type f \
+        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) \
+        | ${pkgs.coreutils}/bin/shuf -n1)
+      [ -n "$img" ] && ${pkgs.awww}/bin/awww img \
+        --transition-type fade --transition-duration 2 "$img"
+      sleep ${toString slideshowInterval}
+    done
+  '';
 
   # Battery readout for Waybar. We can't use Waybar's built-in `battery` module:
   # in 0.55.2 it scans all of /sys/class/power_supply and crashes ("Could not
@@ -67,6 +96,24 @@ let
     systemctl suspend-then-hibernate
   '';
 
+  # Pre-lock "idle dim" warning (mirrors the old GNOME fade): ~30s before the
+  # lock fires, fade the backlight down to 10% as a heads-up. `brightnessctl -s`
+  # saves the real level first so the listener's on-resume (`-r`) snaps it back
+  # the instant there's any activity — or it just proceeds to lock if ignored.
+  idleDim = pkgs.writeShellScript "hypr-idle-dim" ''
+    brightnessctl -s >/dev/null                         # save current level
+    max=$(brightnessctl max)
+    cur=$(( $(brightnessctl get) * 100 / max ))
+    target=10
+    [ "$cur" -le "$target" ] && exit 0
+    while [ "$cur" -gt "$target" ]; do                  # fade over ~0.8s
+      cur=$(( cur - 5 ))
+      [ "$cur" -lt "$target" ] && cur=$target
+      brightnessctl set "''${cur}%" >/dev/null
+      sleep 0.05
+    done
+  '';
+
   # Monitor setup: reassert clamshell + fix the 4K modeset race. Runs at startup
   # (exec-once) and on the $mod+SHIFT+M keybind for manual re-detection. NOT run
   # automatically on `hyprctl reload` — doing a disable→re-enable during a
@@ -86,6 +133,30 @@ let
     # Toggling a monitor leaves Waybar's bar on it dead (Waybar doesn't re-place
     # itself), so restart Waybar to redraw bars on the current outputs.
     pkill waybar 2>/dev/null; sleep 0.3; hyprctl dispatch exec waybar >/dev/null 2>&1
+  '';
+
+  # Secret Service handoff to the PAM-unlocked keyring. pam_gnome_keyring (the
+  # greetd PAM stack) starts a gnome-keyring-daemon at login and UNLOCKS the
+  # login keyring (journal: "gnome-keyring-daemon started properly and unlocked
+  # keyring"), leaving it on the control socket at $XDG_RUNTIME_DIR/keyring. But
+  # greetd does NOT propagate that daemon's GNOME_KEYRING_CONTROL into the D-Bus
+  # activation / systemd-user environment. So when anything requests
+  # org.freedesktop.secrets (gh, Slack, VSCode), D-Bus auto-activates a SEPARATE
+  # gnome-keyring-daemon (org.freedesktop.secrets.service) that, without
+  # GNOME_KEYRING_CONTROL, can't attach to the unlocked instance and opens the
+  # login keyring LOCKED -> gcr password prompt. (gnome-session used to avoid
+  # this by running dbus-update-activation-environment; bare Hyprland doesn't.)
+  #
+  # Fix: pin GNOME_KEYRING_CONTROL to the known socket dir, push it into the
+  # D-Bus + systemd-user activation env (so any later activation attaches to the
+  # unlocked daemon), then register the secrets component IN that unlocked daemon
+  # right away. `--start` with the control socket present attaches rather than
+  # spawning a fresh (locked) daemon. Runs at session start while the PAM daemon
+  # is still fresh, before any secrets consumer can trigger a competing activation.
+  keyringInit = pkgs.writeShellScript "hypr-keyring-init" ''
+    export GNOME_KEYRING_CONTROL="$XDG_RUNTIME_DIR/keyring"
+    ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd GNOME_KEYRING_CONTROL
+    ${pkgs.gnome-keyring}/bin/gnome-keyring-daemon --start --components=secrets >/dev/null 2>&1
   '';
 in
 {
@@ -129,29 +200,58 @@ in
         "2, monitor:desc:Dell Inc. DELL E2318HR 5JDGK74BAJFL, default:true"
       ];
 
+      # --- XWayland HiDPI: kill the fractional-scaling blur ---
+      # XWayland apps with no native Wayland backend (e.g. the Synology FUSE GUI,
+      # an Avalonia/.NET app — Avalonia's Wayland backend is private-preview only
+      # as of v12) render at the monitor's LOGICAL size and let the compositor
+      # bitmap-upscale to native pixels → blurry text/UI on any fractionally
+      # scaled output (the 4K @1.25 and eDP @1.5; the 1080p @1.0 is 1:1 so it
+      # always looked sharp). force_zero_scaling makes XWayland render at NATIVE
+      # pixel density instead, and each toolkit applies its own scale from env.
+      # TRADEOFF: this is session-wide — other XWayland apps that DON'T self-scale
+      # (Java/Swing IDEs like Android Studio / JetBrains) may now render small on
+      # the HiDPI panels and need their own scale hint (e.g. _JAVA_OPTIONS with
+      # -Dsun.java2d.uiScale). Most GTK/Qt/Electron apps run native Wayland here
+      # and are unaffected.
+      xwayland.force_zero_scaling = true;
+
+      # Per-output scale for Avalonia/.NET apps under XWayland, keyed by XRANDR
+      # OUTPUT NAME (Avalonia can't read Hyprland's desc:). Without this, with
+      # force_zero_scaling on, the GUI would render native-tiny on the HiDPI
+      # panels. eDP-1's name is stable; the two DP-x externals CAN swap across
+      # boots (see the monitor list) — if the 4K ever comes up tiny, swap the two
+      # DP-x factors. Only Avalonia reads this var; other toolkits ignore it.
+      env = [
+        "AVALONIA_SCREEN_SCALE_FACTORS,eDP-1=1.5;DP-1=1.25;DP-2=1"
+      ];
+
       # Session helpers — scoped to Hyprland (see header note). polkit agent first
       # so privilege prompts (e.g. the Synology FUSE GUI) have an authenticator.
       exec-once = [
         "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1"
-        # Bring up the gnome-keyring Secret Service (org.freedesktop.secrets).
-        # PAM (pam_gnome_keyring, auto_start) starts the daemon in --login mode
-        # and unlocks the login keyring with the tuigreet password, but under a
-        # bare WM nothing starts the secrets component the way gnome-session did.
-        # This connects to the already-unlocked daemon via its control socket and
-        # registers the Secret Service so Electron/libsecret apps (Slack, VSCode)
-        # can persist their auth tokens. Without it the login keyring stays
-        # inaccessible and Slack logs out on every launch.
-        "${pkgs.gnome-keyring}/bin/gnome-keyring-daemon --start --components=secrets"
+        # Hand the Secret Service off to the PAM-unlocked keyring daemon and push
+        # GNOME_KEYRING_CONTROL into the D-Bus/systemd activation env (see the
+        # keyringInit definition above). Without this, gh/Slack/VSCode trigger a
+        # fresh, LOCKED keyring daemon and get a gcr password prompt every time.
+        "${keyringInit}"
         "waybar"
         "mako"
-        "hyprpaper"
+        "${wallpaperSlideshow}"
         "hypridle"
         # Startup monitor setup (clamshell + 4K modeset fix). Also on $mod+SHIFT+M.
         "${monitorSetup}"
+        # Auto-launch the scratchpad apps at login. The windowrules below park
+        # them on their special workspaces with `silent`, so focus doesn't jump
+        # to a scratchpad as they come up in the background. Discord -> chat,
+        # Spotify -> media. (flatpak is on the session PATH here — exec-once runs
+        # with the login env, not the stripped home.activation PATH.)
+        "flatpak run com.discordapp.Discord"
+        "flatpak run com.spotify.Client"
       ];
 
       input = {
         kb_layout = "us";
+        numlock_by_default = true;
         follow_mouse = 1;
         touchpad = {
           natural_scroll = false;
@@ -176,10 +276,11 @@ in
       # under Hyprland. Software cursors cost a hair of GPU but kill the ghost.
       cursor.no_hardware_cursors = true;
 
-      # Chat apps live on a SPECIAL (scratchpad) workspace, NOT the tiled
-      # workspaces — toggle them in/out as an overlay with $mod+S (bind below).
-      # `silent` stops focus from jumping to the scratchpad when one launches in
-      # the background at login.
+      # Scratchpad apps live on SPECIAL workspaces, NOT the tiled ones — toggle
+      # them in/out as an overlay. Two scratchpads here: `chat` (Slack/Discord/
+      # Signal/Teams, $mod+S) and `media` (Spotify, $mod+A). `silent` stops focus
+      # from jumping to the scratchpad when one launches in the background at
+      # login (both Discord and Spotify auto-launch from exec-once above).
       # SYNTAX (Hyprland 0.55.2, the "v3" rule grammar): each comma-separated
       # field is `<key> <value>` (split on the FIRST space). MATCH PROPS take a
       # `match:` prefix — so it's `match:class ^(…)$`, NOT the old v2
@@ -198,6 +299,11 @@ in
         "workspace special:chat silent, match:class ^(com.discordapp.Discord|discord)$"
         "workspace special:chat silent, match:class ^(org.signal.Signal)$"
         "workspace special:chat silent, match:class ^(com.github.IsmaelMartinez.teams_for_linux|teams-for-linux)$"
+
+        # Spotify -> its own `media` scratchpad ($mod+A). Verified class is the
+        # short `spotify` (XWayland/CEF WM_CLASS); the app id is matched too in
+        # case a future flatpak build reports it instead.
+        "workspace special:media silent, match:class ^(spotify|com.spotify.Client)$"
 
         # Picture-in-Picture video pop-outs. Match on TITLE: the PiP child
         # shares the browser's class (verified Zen -> app.zen_browser.zen, same
@@ -222,7 +328,7 @@ in
 
       # --- Keybinds (see the cheat-sheet comment at the end of this file) ---
       bind = [
-        "$mod, Return, exec, kitty"
+        "$mod, Return, exec, ghostty"
         "ALT, space, exec, wofi --show drun"
         "$mod, D, exec, wofi --show drun"
         "$mod, W, killactive,"
@@ -234,6 +340,7 @@ in
         "$mod, P, pseudo,"
         "$mod, J, layoutmsg, togglesplit"
         "$mod, S, togglespecialworkspace, chat"
+        "$mod, A, togglespecialworkspace, media"
 
         # Move focus
         "$mod, left, movefocus, l"
@@ -257,13 +364,21 @@ in
         '', Print, exec, grim -g "$(slurp)" - | wl-copy''
       ]
       # Workspaces: $mod+1..9,0 switch; $mod+SHIFT+1..9,0 send window there.
+      # The numpad mirrors the top row. Bound by KEYCODE (not the KP_n keysym)
+      # so it works regardless of NumLock — NumLock-off the numpad emits
+      # Home/End/arrows, but the physical keycode is constant. xkb keycodes
+      # (evdev+8) in workspace order 1..9,0: KP_1=87 KP_2=88 KP_3=89 KP_4=83
+      # KP_5=84 KP_6=85 KP_7=79 KP_8=80 KP_9=81 KP_0=90.
       ++ (builtins.concatLists (builtins.genList (i:
         let
           ws = toString (i + 1);
           key = toString (if i == 9 then 0 else i + 1);
+          kp = toString (builtins.elemAt [ 87 88 89 83 84 85 79 80 81 90 ] i);
         in [
           "$mod, ${key}, workspace, ${ws}"
           "$mod SHIFT, ${key}, movetoworkspace, ${ws}"
+          "$mod, code:${kp}, workspace, ${ws}"
+          "$mod SHIFT, code:${kp}, movetoworkspace, ${ws}"
         ]) 10));
 
       # Drag to move/resize: $mod + left/right mouse button.
@@ -293,8 +408,43 @@ in
     };
   };
 
-  # Terminal launched by $mod+Return (config-only; no daemon).
-  programs.kitty.enable = true;
+  # Terminal launched by $mod+Return (config-only; no daemon). Ghostty: GPU-native
+  # (GTK4/OpenGL on the iGPU — no nvidia-offload needed), replaces the bare kitty.
+  # Theme is pinned dark (Catppuccin Mocha) regardless of the desktop's darkman
+  # light/dark state — to follow the system instead, use
+  # `theme = "light:Catppuccin Latte,dark:Catppuccin Mocha"`.
+  programs.ghostty = {
+    enable = true;
+    settings = {
+      theme = "Catppuccin Mocha";   # always dark, regardless of the desktop's
+                                    # darkman light/dark state (matches Waybar/mako)
+      font-family = "JetBrainsMono Nerd Font";                 # already in fonts.packages
+      font-size = 12;
+      background-opacity = 0.95;        # subtle; Hyprland blurs it if blur is on
+      cursor-style = "block";
+      mouse-hide-while-typing = true;
+      window-padding-x = 8;
+      window-padding-y = 8;
+      copy-on-select = "clipboard";
+      confirm-close-surface = false;
+      # Shell integration marks each prompt — required for jump_to_prompt below —
+      # and drives cursor shape + window title. Auto-detected for zsh; pinned.
+      shell-integration = "zsh";
+      # ssh-terminfo: auto-install Ghostty's terminfo on remotes over ssh so tmux /
+      # ncurses apps work (else "missing or unsuitable terminal: xterm-ghostty").
+      # ssh-env: fallback that exports TERM=xterm-256color where terminfo can't be
+      # installed (read-only host, no tic). Both = best coverage for SSH-heavy work.
+      shell-integration-features = "cursor,sudo,title,ssh-env,ssh-terminfo";
+      keybind = [
+        # Closest non-Warp analogue to "blocks": hop the viewport prompt-to-prompt.
+        "ctrl+shift+up=jump_to_prompt:-1"
+        "ctrl+shift+down=jump_to_prompt:1"
+        # Warp-style panes.
+        "ctrl+shift+enter=new_split:right"
+        "ctrl+shift+backslash=new_split:down"
+      ];
+    };
+  };
 
   # Status bar. systemd.enable = false on purpose — started from exec-once so it
   # only runs under Hyprland, not GNOME.
@@ -310,7 +460,7 @@ in
       modules-right = [ "pulseaudio" "network" "custom/battery" "tray" ];
 
       "hyprland/workspaces".format = "{id}";
-      clock.format = "{:%a %d %b  %H:%M}";
+      clock.format = "{:%a %d %b  %I:%M %p}";
       "custom/battery" = {
         exec = "${batteryScript}";
         interval = 30;
@@ -358,14 +508,10 @@ in
     };
   };
 
-  # Wallpaper config (started via exec-once, not the HM service module).
-  xdg.configFile."hypr/hyprpaper.conf".text = ''
-    preload = ${wallpaper}
-    wallpaper = ,${wallpaper}
-    splash = false
-  '';
+  # (Wallpaper is now the swww slideshow — see wallpaperSlideshow in the let
+  # block and the exec-once list. No hyprpaper.conf needed.)
 
-  # Idle behavior: lock at 5 min, screen off at 6 min, and suspend-then-hibernate
+  # Idle behavior: dim warning at 4.5 min, lock at 5 min, screen off at 6 min, and suspend-then-hibernate
   # at 20 min ON BATTERY ONLY — matching the old GNOME power config (auto-suspend
   # on battery idle, "nothing" on AC). Lid/power-key suspend stays owned by the
   # logind matrix in modules/hibernation.nix; this just adds the idle path.
@@ -374,6 +520,13 @@ in
         lock_cmd = pidof hyprlock || hyprlock
         before_sleep_cmd = loginctl lock-session
         after_sleep_cmd = hyprctl dispatch dpms on
+    }
+    # Dim warning ~30s before the lock (GNOME-style idle fade). on-resume
+    # restores the saved brightness the moment there's activity.
+    listener {
+        timeout = 270
+        on-timeout = ${idleDim}
+        on-resume = brightnessctl -r
     }
     listener {
         timeout = 300
@@ -402,12 +555,12 @@ in
     border-radius=6
   '';
 
-  # Hyprland-session tooling. (kitty/waybar/hyprlock come from their HM modules
+  # Hyprland-session tooling. (ghostty/waybar/hyprlock come from their HM modules
   # above; wpctl ships with the system PipeWire/WirePlumber.)
   home.packages = with pkgs; [
     wofi            # app launcher ($mod+D / $mod+R)
     mako            # notifications (exec-once)
-    hyprpaper       # wallpaper (exec-once)
+    awww            # wallpaper slideshow daemon (exec-once; was swww)
     hypridle        # idle -> lock/dpms (exec-once)
     grim slurp      # screenshots (Print)
     wl-clipboard    # wl-copy / wl-paste
@@ -417,7 +570,7 @@ in
   # ──────────────────────────────────────────────────────────────────────────
   # KEYBIND CHEAT-SHEET ($mod = Super/Windows key)
   # Apps & session
-  #   $mod+Return ............ terminal (kitty)
+  #   $mod+Return ............ terminal (ghostty)
   #   Alt+Space (or $mod+D) .. app launcher (wofi, Spotlight-style)
   #   $mod+W ................. close focused window
   #   $mod+L ................. lock screen (hyprlock)
@@ -431,10 +584,11 @@ in
   #   $mod+Shift+arrows ...... move window within the layout
   #   $mod+drag (L/R mouse) .. move / resize window
   # Workspaces & monitors
-  #   $mod+1..0 .............. switch to workspace 1..10
-  #   $mod+Shift+1..0 ........ send window to workspace 1..10
+  #   $mod+1..0 .............. switch to workspace 1..10 (numpad mirrors this)
+  #   $mod+Shift+1..0 ........ send window to workspace 1..10 (numpad too)
   #   $mod+Ctrl+arrows ....... move current workspace to the monitor that way
   #   $mod+S ................. toggle chat scratchpad (Slack/Discord/Signal/Teams)
+  #   $mod+A ................. toggle media scratchpad (Spotify)
   #   $mod+Shift+M ........... re-run monitor setup (4K modeset fix + clamshell)
   # Media / capture
   #   Print .................. region screenshot -> clipboard
