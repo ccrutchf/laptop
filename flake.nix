@@ -1,5 +1,5 @@
 {
-  description = "chris-laptop — personal NixOS workstation (MSI Creator 15 A11UE)";
+  description = "personal machines — chris-laptop (NixOS, MSI Creator 15) + chris-macbook (nix-darwin)";
 
   inputs = {
     # DELIBERATELY UNSTABLE. This is a personal daily driver, not a fleet box
@@ -29,6 +29,13 @@
     # measuring the boot path — without it an attacker can swap the initrd.
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v0.4.2";  # bump to latest release as needed
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # nix-darwin: declarative macOS system config for the second host (chris-macbook,
+    # a MacBook Air). master tracks nixos-unstable, matching this flake's nixpkgs.
+    nix-darwin = {
+      url = "github:nix-darwin/nix-darwin/master";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -71,7 +78,7 @@
       # inputs.impermanence.nixosModules.impermanence (mirrors krg-infra).
       specialArgs = { inherit inputs; };
       modules = [
-        ./configuration.nix   # imports ./disko-config.nix + ./modules/*.nix itself
+        ./hosts/chris-laptop/default.nix   # imports its disko-config + ../../modules/nixos/*
 
         disko.nixosModules.disko
         lanzaboote.nixosModules.lanzaboote
@@ -83,7 +90,26 @@
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
           home-manager.extraSpecialArgs = { inherit inputs; };
-          home-manager.users.chris = import ./home.nix;
+          home-manager.users.chris = import ./home/linux.nix;
+        }
+      ];
+    };
+
+    # The MacBook Air. Mirrors the NixOS host's wiring: a host module
+    # (darwin/configuration.nix) plus home-manager as a darwin module. The non-Nix
+    # package layer is `depend` (packages.yaml), NOT nix-darwin's homebrew module.
+    darwinConfigurations.chris-macbook = inputs.nix-darwin.lib.darwinSystem {
+      system = "aarch64-darwin";
+      specialArgs = { inherit inputs; };
+      modules = [
+        ./hosts/chris-macbook/default.nix
+
+        home-manager.darwinModules.home-manager
+        {
+          home-manager.useGlobalPkgs = true;
+          home-manager.useUserPackages = true;
+          home-manager.extraSpecialArgs = { inherit inputs; };
+          home-manager.users.chris = import ./home/darwin.nix;
         }
       ];
     };

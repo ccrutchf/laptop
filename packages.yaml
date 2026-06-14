@@ -70,3 +70,29 @@ data-tools:
     # Prebuilt cp311-abi3 wheel from the v0.6.1 GitHub release (CLI: `origin`).
     e4e-data-management:
       url: https://github.com/UCSD-E4E/e4e-data-management/releases/download/v0.6.1/e4e_data_management-0.6.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+
+# macOS (chris-macbook). depend drives Homebrew here — the home-manager activation
+# runs `depend install --prune` (home/darwin.nix), so this block IS the source of
+# truth: brew/cask/mas packages NOT listed get removed on `darwin-rebuild switch`.
+# brew never runs as sudo; a formula/cask `source:` containing a slash is a tap.
+#
+# Starting minimal on purpose (re-approve apps as you go). NOTE: while a section is
+# empty, depend's prune safety-rail leaves that provider untouched — so nothing is
+# removed until you actually declare entries here. macfuse is intentionally dropped.
+mac-apps:
+  platform: osx
+  brew:
+    # iOS / dev toolchain (uncomment what you want managed):
+    # cocoapods:
+    # fastlane:
+    # swiftlint:
+    # rbenv:
+    # git-lfs:
+  cask:
+    # GUI apps via Homebrew cask:
+    # visual-studio-code:
+    # zen-browser:
+  mas:
+    # Mac App Store apps, keyed by numeric id (find via `mas search <name>`):
+    # "497799835":   # Xcode
+    #   name: Xcode

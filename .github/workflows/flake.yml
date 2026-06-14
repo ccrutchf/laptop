@@ -1,0 +1,36 @@
+name: flake
+
+# Validate both hosts of the flake. The NixOS host is evaluated (a full system
+# build pulls cudatoolkit/steam/android-studio — multi-GB, won't fit a hosted
+# runner); evaluating the toplevel derivation still forces the whole module tree
+# and the hosts/ modules/nixos/ home/ import paths to resolve. The smaller darwin
+# host is built for real on a macOS runner.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  nixos:
+    name: eval chris-laptop (x86_64-linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Evaluate the system closure
+        run: nix eval .#nixosConfigurations.chris-laptop.config.system.build.toplevel.drvPath --raw
+
+  darwin:
+    name: build chris-macbook (aarch64-darwin)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      # NOTE: requires the dependency-manager flake's aarch64-darwin output to be
+      # published and locked here (flake.lock), and its nix/deps.json regenerated
+      # for the osx runtime. Until those land this job is expected to fail at the
+      # `depend` build — that's the signal that the follow-up steps are pending.
+      - name: Build the darwin system
+        run: nix build .#darwinConfigurations.chris-macbook.system --print-build-logs

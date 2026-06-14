@@ -2,41 +2,85 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-This is the NixOS system configuration for a single machine (`chris-laptop`, an MSI Creator 15 A11UE). It **is a flake** (`flake.nix`) tracking **`nixos-unstable`** (home-manager follows it). The disk layout is declarative via **disko** (`disko-config.nix`), and the root is **impermanent** — a btrfs `@` subvolume reset to empty every boot (the previous root kept as `@old`), with durable `/persist`, `/home`, `/nix`, `/var/log`, and `/var/lib/docker` subvolumes. It is a personal machine and is **not** part of the KastnerRG/krg-infra fleet.
+This is a **multi-host** Nix configuration for two personal machines, in one flake tracking **`nixos-unstable`** (home-manager follows it):
+
+- **`chris-laptop`** — NixOS on an MSI Creator 15 A11UE. Declarative disk via **disko**, **impermanent** btrfs root (`@` reset to empty every boot, previous kept as `@old`; durable `/persist`, `/home`, `/nix`, `/var/log`, `/var/lib/docker`), hibernation, Secure Boot.
+- **`chris-macbook`** — macOS (Apple Silicon MacBook Air) via **nix-darwin**. Nix installed with the **Determinate Systems** installer (it owns the daemon, so `nix.enable = false`); macOS itself is not declaratively installed.
+
+Neither is part of the KastnerRG/krg-infra fleet.
 
 ## Commands
 
-- **Apply config:** `sudo nixos-rebuild switch --flake .#chris-laptop` — builds and activates. This also runs the home-manager activation, which in turn runs `depend install` against `packages.yaml` (see below).
-- **Update inputs:** `nix flake update` (or `nix flake update nixpkgs`), then switch.
-- **Validate without activating:** `nixos-rebuild build --flake .#chris-laptop` (build the toplevel, no switch) or `nix flake check`. Confirm a change builds before switching — and ALWAYS before a disk wipe.
-- **Disk layout (DESTRUCTIVE) + full reinstall:** see `REBUILD.md` (disko wipes the 2TB drive; Windows on the other NVMe is untouched).
-- **Preview non-Nix package changes:** `depend plan --config packages.yaml` shows the resolved install plan for `packages.yaml` without applying it. There is no test suite or linter in this repo — `nixos-rebuild`'s evaluation is the only validation.
+- **Apply (NixOS):** `sudo nixos-rebuild switch --flake .#chris-laptop`
+- **Apply (macOS):** `darwin-rebuild switch --flake .#chris-macbook`
+- Both run the home-manager activation, which runs `depend` against `packages.yaml` (Linux: `depend install`; macOS: `depend install --prune` — see below).
+- **Update inputs:** `nix flake update` (or a single input), then switch.
+- **Validate without activating:** `nixos-rebuild build --flake .#chris-laptop`, or `nix build .#darwinConfigurations.chris-macbook.system`, or `nix eval .#nixosConfigurations.chris-laptop.config.system.build.toplevel.drvPath` (cheap eval). CI does this for both hosts (`.github/workflows/flake.yml`). Confirm a change builds before switching — and ALWAYS before a disk wipe.
+- **Full reinstall:** `REBUILD.md` is the index → `REBUILD-NIXOS.md` (NixOS, disko wipes the 2TB drive; Windows on the other NVMe is untouched) and `REBUILD-MAC.md` (macOS bootstrap).
+- **Preview non-Nix package changes:** `depend plan --config packages.yaml` (add `--prune` to also preview removals). `nixos-rebuild`/`darwin-rebuild` evaluation is the only validation — there is no separate test suite here.
 
-## Architecture
+## Repository layout
 
-**Entry point and module wiring.** `flake.nix` is the entry point: it defines `nixosConfigurations.chris-laptop` from `nixpkgs` (unstable) and pulls in home-manager, disko, impermanence, lanzaboote, sops-nix, and the user's `dependency-manager` as inputs. `configuration.nix` is the host module — it imports `hardware-configuration.nix`, `disko-config.nix`, and `modules/*.nix`, and sets the `my.*` feature toggles. home-manager is wired in `flake.nix` (`home-manager.users.chris = import ./home.nix`). **disko owns the disk entries** (`fileSystems`/`luks`/`swapDevices`), so `hardware-configuration.nix` keeps only the kernel-module/microcode lines. `system.stateVersion` (configuration.nix) and `home.stateVersion` (home.nix) must stay in sync and generally must not change.
+```
+flake.nix                         nixosConfigurations.chris-laptop + darwinConfigurations.chris-macbook
+hosts/
+  chris-laptop/default.nix        NixOS host module (imports its disko-config + ../../modules/nixos/*)
+  chris-laptop/disko-config.nix   declarative disk (btrfs-on-LUKS, the 2TB drive ONLY)
+  chris-laptop/hardware-configuration.nix   kernel modules / microcode only (disko owns disk entries)
+  chris-macbook/default.nix       nix-darwin host module
+modules/nixos/                    NixOS feature modules: impermanence, hibernation, secure-boot, backups, hyprland
+home/
+  common.nix                      cross-platform home-manager (shell stack, git, core CLIs) — BOTH hosts
+  linux.nix                       Linux/desktop home (GNOME/Hyprland/flatpak/dconf/GTK/darkman) + Linux depend hook
+  darwin.nix                      macOS home + the --prune depend hook
+  hyprland.nix                    Hyprland session config (imported by home/linux.nix)
+packages.yaml                     non-Nix packages, per-platform blocks, reconciled by depend
+```
 
-**Three layers of package management** — know which layer a package belongs to before adding it:
-1. **System packages** → `environment.systemPackages` in `configuration.nix` (CLIs, drivers, system tools).
-2. **User / GUI packages** → `home.packages` in `home.nix` (home-manager, e.g. vscode, android-studio, keepass).
-3. **Non-Nix packages** → `packages.yaml`, reconciled by `dependency-manager` (the `depend` binary). This covers Flatpaks, VSCode extensions, pipx packages, and browser extensions — things with no good nixpkgs path or that the user wants from upstream.
+**Wiring.** `flake.nix` passes all inputs down via `specialArgs`. Each host's home is wired there: NixOS → `home/linux.nix`, darwin → `home/darwin.nix`; both import `home/common.nix`. `system.stateVersion` (per-host module) and `home.stateVersion` (`home/common.nix`) must generally not change.
 
-**GUI app default: Flatpak.** New desktop apps go in `packages.yaml` (Flatpak) by default — for sandboxing and vendor-fresh upstream builds. Reach for `home.packages` (layer 2) only when the app is open-source *and* gains something from Nix integration (e.g. vscode, which the `vscode:` extension block `requires: [code]`; android-studio; keepass). Proprietary/sandbox-worthy apps (Spotify, Slack, Discord, Zoom, …) belong in Flatpak.
+## Package management — know the layer AND the platform
 
-**The `depend` activation hook (critical gotcha).** `home.nix` pulls the `depend` binary from the `dependency-manager` flake input (was `builtins.getFlake`, which is illegal in a flake's pure eval) and runs `depend install --config packages.yaml` from a `home.activation` hook on every `switch`. That hook runs inside a systemd unit with a **stripped PATH**, so every provider binary `depend` shells out to (currently `flatpak`, the plain `vscode` (`code`), `pipx`) must be added explicitly to the activation's `lib.makeBinPath [ ... ]`. If you add a `packages.yaml` provider that invokes a new external binary, you must also add that binary there or the activation will silently fail to find it.
+1. **System packages** → `environment.systemPackages` in `hosts/chris-laptop/default.nix` (NixOS) — CLIs, drivers, system tools.
+2. **Cross-platform user CLIs** → `home.packages` in `home/common.nix` (shared by both hosts: `gh`, `claude-code`, `uv`, `depend`).
+3. **Host-specific GUI/desktop** → `home.packages` in `home/linux.nix` (vscode, android-studio, keepass, GNOME bits) or `home/darwin.nix` (currently minimal).
+4. **Non-Nix packages** → `packages.yaml`, reconciled by `depend`. On Linux: Flatpaks, VSCode/browser extensions, pipx (blocks scoped `platform: linux`). On macOS: Homebrew `brew`/`cask` + Mac App Store `mas` (the `platform: osx` block).
 
-**`packages.yaml` schema** (consumed by `depend`): a top-level map of named blocks. Each block has filter keys (`platform`, `architecture`) and provider sections. Notable providers in use here:
-- `flatpak:` — keys are app IDs, `source: flathub`.
-- `vscode:` — keys are extension IDs; the block uses `requires: [code]` to assert VSCode (installed via Nix) is present before applying.
-- `pipx:` — keys are the pip distribution name; `url:` points at a wheel/sdist.
-- `zen:` / `firefox:` — browser extensions installed via enterprise-policy files. **Keys are the addon ID** (quote IDs that start with `{`, e.g. Bitwarden's GUID, or YAML parses them as a flow-map), and `source:` is the AMO slug used to build the `.xpi` URL.
-- `dependencies: [<id>]` orders one package after another within the plan (e.g. Zen extensions depend on `app.zen_browser.zen` so the policy is written after the flatpak's install dir exists).
-**`my.*` feature modules** (`modules/`, toggled in `configuration.nix`):
-- `impermanence.nix` — btrfs root rollback in initrd: each boot `@` is moved to `@old` (recoverable) and recreated EMPTY via `btrfs subvolume create` (a recursive delete first clears the subvolumes systemd nests under `@`: `var/lib/{machines,portables}`, `/srv`, `/tmp`, `/var/tmp`). Plus the `/persist` bind list. Ordered after the LUKS device + `systemd-hibernate-resume.service` (so a resume isn't wiped); reseeds `/usr/bin/env` for the systemd-258 empty-`/usr` PID1 freeze. **GOTCHA:** the rollback's `mount`/`btrfs` binaries must be in `boot.initrd.systemd.storePaths` — the service `path` alone leaves them off the initrd (`mount: command not found`). Because `/etc/shadow` is on the ephemeral root, **passwords are declarative**: `users.users.chris.hashedPasswordFile` (hash in `/persist`, not git) + `users.mutableUsers = false`.
-- `hibernation.nix` — lid matrix (docked→`ignore`=clamshell, AC/battery→suspend-then-hibernate); resume from the NoCoW `/swap/swapfile` (`resume_offset` is install-specific, from `btrfs inspect-internal map-swapfile` — re-derive on reinstall).
-- `secure-boot.nix` — lanzaboote. **Two-phase**: keep `my.secureBoot.enable = false` for the first install, then `sbctl create-keys` → enable → `sbctl enroll-keys --microsoft` (MS keys so Windows still boots) → re-enroll TPM2 bound to the measured PCRs.
-- `backups.nix` — restic → Nextcloud over rclone WebDAV (`~/Repos`). **Gated** on the sops secrets existing (`my.backups.enable`).
+**GUI app defaults.** Linux: Flatpak by default (sandboxing + vendor-fresh), `home.packages` only when open-source and Nix-integrated (vscode, android-studio, keepass). macOS: Homebrew casks via `packages.yaml` — **not** nix-darwin's `homebrew` module (see below).
 
-Secrets are **sops-nix** (`.sops.yaml`, `secrets/`); the age identity is derived (`ssh-to-age`) from the SSH key synced via Nextcloud, so every personal machine decrypts and a reinstall doesn't lose it. **Disk:** `disko-config.nix` is btrfs-on-LUKS, **the 2TB drive ONLY** — Windows lives on a separate, never-referenced NVMe.
+## The `depend` activation hook (critical gotcha)
 
-**Hardware notes** (in `configuration.nix`): NVIDIA RTX 3060 + Intel iGPU using PRIME render-offload (iGPU drives the display, `nvidia-offload` wrapper for the dGPU); LUKS root with TPM2 auto-unlock (passphrase fallback); GNOME on Wayland; audio is PipeWire with HDA power-saving disabled (`boot.extraModprobeConfig`) to avoid clipped playback onsets.
+Both home configs pull the `depend` binary from the `dependency-manager` flake input (it is cross-platform now — the flake exposes `aarch64-darwin`) and run it from a `home.activation` hook on every switch. That hook runs with a **stripped PATH**, so every provider binary `depend` shells out to must be on the activation `PATH`:
+
+- **Linux** (`home/linux.nix`): `depend install` (additive), `PATH` via `lib.makeBinPath [ pkgs.flatpak vscode pkgs.pipx ]`.
+- **macOS** (`home/darwin.nix`): `depend install --prune` (**converges** — removes brew/cask/mas packages not in `packages.yaml`), `PATH` prepends `/opt/homebrew/bin` (where `brew`/`mas` live). Homebrew is a prerequisite — depend shells out to `brew`, it does not build it.
+
+If you add a `packages.yaml` provider that invokes a new external binary, add that binary to the relevant activation `PATH` or the activation silently fails to find it.
+
+## `packages.yaml` schema (consumed by `depend`)
+
+A top-level map of named blocks. Each has filter keys (`platform`, `architecture`) and provider sections. Providers in use:
+- `flatpak:` (Linux) — keys are app IDs, `source: flathub`.
+- `vscode:` (Linux) — extension IDs; the block uses `requires: [code]` to assert VSCode is present before applying.
+- `pipx:` (Linux) — pip distribution name; `url:` points at a wheel/sdist.
+- `zen:` / `firefox:` (Linux) — browser extensions via enterprise-policy files. **Keys are the addon ID** (quote IDs starting with `{`); `source:` is the AMO slug for the `.xpi` URL.
+- `brew:` / `cask:` / `mas:` (macOS, `platform: osx`) — Homebrew formulae / casks / Mac App Store (numeric id). `brew` never runs as sudo; a `source:` with a slash is a tap.
+- `dependencies: [<id>]` orders one package after another within the plan.
+
+**Convergence/prune (macOS):** depend's `--prune` removes installed-but-undeclared packages. A safety rail skips any provider that declares **zero** packages on the current platform — so an empty `brew:`/`cask:`/`mas:` section means depend leaves Homebrew untouched until you actually list things. This is intentionally why nix-darwin's `homebrew` module is NOT used: one `packages.yaml` drives the non-Nix layer on both machines.
+
+## `my.*` feature modules (`modules/nixos/`, toggled in `hosts/chris-laptop/default.nix`)
+
+- `impermanence.nix` — btrfs root rollback in initrd: each boot `@` → `@old` (recoverable) and recreated EMPTY (a recursive delete first clears the subvolumes systemd nests under `@`). Plus the `/persist` bind list. Ordered after the LUKS device + `systemd-hibernate-resume.service`; reseeds `/usr/bin/env` for the systemd-258 empty-`/usr` PID1 freeze. **GOTCHA:** the rollback's `mount`/`btrfs` binaries must be in `boot.initrd.systemd.storePaths`. Because `/etc/shadow` is on the ephemeral root, **passwords are declarative**: `users.users.chris.hashedPasswordFile` (hash in `/persist`, not git) + `users.mutableUsers = false`.
+- `hibernation.nix` — lid matrix (docked→`ignore`, AC/battery→suspend-then-hibernate); resume from the NoCoW `/swap/swapfile` (`resume_offset` is install-specific — re-derive on reinstall).
+- `secure-boot.nix` — lanzaboote. **Two-phase**: `my.secureBoot.enable = false` for the first install, then `sbctl create-keys` → enable → `sbctl enroll-keys --microsoft` → re-enroll TPM2 bound to the measured PCRs.
+- `backups.nix` — restic → Nextcloud over rclone WebDAV (`~/Repos`). **Gated** on the sops secrets (`my.backups.enable`).
+- `hyprland.nix` — the system half of the Hyprland session (greeter is greetd + ReGreet inside a Hyprland instance; see the greetd block in the host module).
+
+Secrets are **sops-nix** (`.sops.yaml`, `secrets/`); the age identity is derived (`ssh-to-age`) from the SSH key synced via Nextcloud, so every personal machine decrypts and a reinstall doesn't lose it. **Disk:** `hosts/chris-laptop/disko-config.nix` is btrfs-on-LUKS, **the 2TB drive ONLY** — Windows lives on a separate, never-referenced NVMe.
+
+**Hardware notes** (in `hosts/chris-laptop/default.nix`): NVIDIA RTX 3060 + Intel iGPU using PRIME render-offload; LUKS root with TPM2 auto-unlock (passphrase fallback); Hyprland on Wayland (GNOME removed); PipeWire with HDA power-saving disabled to avoid clipped playback onsets.
+
+## CI
+
+`.github/workflows/flake.yml` validates both hosts on every push/PR: the NixOS host is evaluated (a full system build is multi-GB — too big for hosted runners), the darwin host is built on a macOS runner. The darwin job requires the `dependency-manager` darwin output to be published + locked here.

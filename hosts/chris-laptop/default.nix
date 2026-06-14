@@ -7,11 +7,11 @@
   imports =
     [ ./hardware-configuration.nix
       ./disko-config.nix
-      ./modules/impermanence.nix
-      ./modules/hibernation.nix
-      ./modules/secure-boot.nix
-      ./modules/backups.nix
-      ./modules/hyprland.nix
+      ../../modules/nixos/impermanence.nix
+      ../../modules/nixos/hibernation.nix
+      ../../modules/nixos/secure-boot.nix
+      ../../modules/nixos/backups.nix
+      ../../modules/nixos/hyprland.nix
     ];
 
   # --- local feature toggles (see each module) ---

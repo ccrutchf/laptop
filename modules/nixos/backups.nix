@@ -22,7 +22,7 @@ in {
     # age identity = ssh-to-age of the Nextcloud-synced user key. It must be
     # present at activation (restore it from Nextcloud post-install) or sops can't
     # decrypt and the restic secrets won't appear.
-    sops.defaultSopsFile = ../secrets/secrets.yaml;
+    sops.defaultSopsFile = ../../secrets/secrets.yaml;
     sops.age.sshKeyPaths = [ "/home/chris/.ssh/id_ed25519" ];
 
     sops.secrets."restic/password" = { };       # encrypts the restic repo
