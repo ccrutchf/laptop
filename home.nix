@@ -165,6 +165,27 @@ in
     categories = [ "Utility" "Network" "FileTools" ];
   };
 
+  # Flatpak (1.16.x) can't parse NixOS's /etc/localtime symlink chain
+  # (/etc/zoneinfo -> /nix/store/…tzdata…), and NixOS ships no /etc/timezone
+  # fallback, so every sandbox defaults to UTC and Electron apps (Slack, …)
+  # render timestamps in UTC. Inject the zone into all *user* flatpaks via a
+  # global override. Keep this in sync with time.timeZone (configuration.nix).
+  xdg.dataFile."flatpak/overrides/global".text = ''
+    [Environment]
+    TZ=America/Los_Angeles
+  '';
+
+  # Unified cursor: sets the theme + size everywhere at once (GTK, the XCURSOR_*
+  # env vars for Wayland and X11/XWayland apps, and hyprcursor) instead of just
+  # GTK. Bumped to 32px (default 24) for visibility.
+  home.pointerCursor = {
+    name = "Yaru";
+    package = pkgs.yaru-theme;
+    size = 32;
+    gtk.enable = true;   # replaces the old gtk.cursorTheme block
+    x11.enable = true;   # exports XCURSOR_* for XWayland apps
+  };
+
   gtk = {
     enable = true;
     # No static `theme` here on purpose: darkman owns gtk-theme + color-scheme at
@@ -174,10 +195,7 @@ in
       name = "Adwaita";          # GNOME default icons (reverted from Yaru)
       package = pkgs.adwaita-icon-theme;
     };
-    cursorTheme = {
-      name = "Yaru";
-      package = pkgs.yaru-theme;
-    };
+    # cursorTheme moved to home.pointerCursor above (so size applies too).
   };
 
   dconf.settings = {
