@@ -154,22 +154,70 @@
 
   # Graphical greeter (ReGreet). The greetd command above launches it inside
   # Hyprland (overriding the module's default cage command). theme/font default
-  # to Adwaita/Cantarell; background matches the desktop wallpaper for continuity.
+  # to Adwaita/Cantarell.
+  #
+  # NO `background` ON PURPOSE — it crash-loops the greeter on this setup. ReGreet
+  # 0.3 loaded the wallpaper directly via gdk-pixbuf; 0.4 (pulled in by a
+  # `nix flake update` nixpkgs bump) rewrote background loading to try `glycin`
+  # first, then fall back to `gtk::MediaFile` (GStreamer) for anything glycin
+  # can't decode. The greeter's closure ships neither working glycin loaders nor
+  # a GStreamer plugin path (no GST_PLUGIN_SYSTEM_PATH_1_0, no gst-plugins-good),
+  # so glycin fails, the GStreamer fallback aborts inside gst_play_constructed
+  # (SIGABRT), regreet never creates a session, and greetd respawns it forever —
+  # the "dbus error / login screen crashes / retries" loop. Omitting `background`
+  # skips that whole code path; the greeter shows the dark Adwaita theme instead.
+  # (To bring the wallpaper back, the greeter needs glycin-loaders wired into its
+  # environment — a separate, testable change.)
   programs.regreet = {
     enable = true;
     settings = {
-      background = {
-        path = pkgs.nixos-artwork.wallpapers.simple-dark-gray.gnomeFilePath;
-        fit = "Cover";
-      };
       GTK.application_prefer_dark_theme = true;
     };
   };
 
-  # ReGreet lists sessions from the wayland-sessions desktop files in XDG_DATA_DIRS.
-  # Dropping GDM removed the display manager that used to register them, leaving the
-  # list empty — so register Hyprland's session entry (Exec=start-hyprland) here.
-  services.displayManager.sessionPackages = [ pkgs.hyprland ];
+  # ReGreet lists sessions from the wayland-sessions desktop files registered via
+  # services.displayManager.sessionPackages. The programs.hyprland module already
+  # registers the full `pkgs.hyprland` (line `sessionPackages = [ cfg.package ]`),
+  # but that package bundles TWO session files — `hyprland.desktop`
+  # (Exec=start-hyprland) and `hyprland-uwsm.desktop` (the UWSM wrapper, which we
+  # don't configure). Trim the list down to just the plain session so the UWSM
+  # entry never shows. mkForce replaces the module's default list (plain list-merge
+  # would keep the uwsm entry around).
+  services.displayManager.sessionPackages = lib.mkForce [
+    (pkgs.runCommand "hyprland-session-plain" {
+      passthru.providedSessions = [ "hyprland" ];
+    } ''
+      install -Dm644 \
+        ${config.programs.hyprland.package}/share/wayland-sessions/hyprland.desktop \
+        $out/share/wayland-sessions/hyprland.desktop
+    '')
+  ];
+
+  # Make Hyprland the session ReGreet lands on. ReGreet has NO "default session"
+  # setting — it preselects the session it cached as the initial user's last-used
+  # one, in /var/lib/regreet/state.toml, keyed by the desktop-file Name= field
+  # ("Hyprland"). With no cache it leaves the session box unselected, and
+  # submitting an empty session drops greetd to the user's shell — the "text
+  # prompt" instead of Hyprland. /var/lib/regreet is NOT in the impermanence
+  # persist list, so it's wiped every boot and a manual pick never sticks.
+  #
+  # So re-seed the cache each boot (systemd-tmpfiles runs well before greetd) with
+  # chris + Hyprland. Then the greeter comes up with the username and Hyprland
+  # already chosen, and a bare Enter (after the password) launches Hyprland. The
+  # `C` rule copies only when the target is absent — which, on this wiped root, is
+  # every boot; regreet is free to rewrite it within a session (greeter owns the
+  # dir), and the next boot reseeds. The session string MUST equal the desktop
+  # Name= ("Hyprland"), not the file stem ("hyprland").
+  systemd.tmpfiles.rules = let
+    regreetState = pkgs.writeText "regreet-state.toml" ''
+      last_user = "chris"
+
+      [user_to_last_sess]
+      chris = "Hyprland"
+    '';
+  in [
+    "C /var/lib/regreet/state.toml 0644 greeter greeter - ${regreetState}"
+  ];
 
   services.flatpak.enable = true;
 
