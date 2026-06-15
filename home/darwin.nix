@@ -30,11 +30,12 @@ in
   # Reconcile the non-Nix layer on every `darwin-rebuild switch`. Unlike the Linux
   # host this CONVERGES (--prune): brew/cask/mas packages not in packages.yaml's
   # osx block are removed, so the machine matches the manifest (nix-darwin `zap`
-  # equivalent). brew/mas live in /opt/homebrew/bin; add it to PATH explicitly in
-  # case the activation runs with a minimal environment.
+  # equivalent). brew/mas live in /opt/homebrew/bin; pipx (the data-tools provider)
+  # comes from Nix. Add both to PATH explicitly in case the activation runs with a
+  # minimal environment.
   home.activation.dependencyManagerInstall =
     lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      export PATH="/opt/homebrew/bin:${lib.makeBinPath [ pkgs.git ]}:$PATH"
+      export PATH="/opt/homebrew/bin:${lib.makeBinPath [ pkgs.git pkgs.pipx ]}:$PATH"
       $DRY_RUN_CMD ${depend}/bin/depend install --prune --config ${../packages.yaml}
     '';
 }
