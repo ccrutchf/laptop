@@ -44,61 +44,53 @@ vscode-extensions:
 linux-flatpaks:
   platform: linux
   flatpak:
-    # Zen browser
+    # Comments add context the id doesn't (function or the non-obvious "why");
+    # household-name apps are left bare.
     app.zen_browser.zen:
       source: flathub
-    # Nextcloud desktop client
     com.nextcloud.desktopclient.nextcloud:
       source: flathub
-    # Shotcut — video editor
+    # video editor
     org.shotcut.Shotcut:
       source: flathub
-    # Slack
     com.slack.Slack:
       source: flathub
-    # Discord
     com.discordapp.Discord:
       source: flathub
-    # Zoom
     us.zoom.Zoom:
       source: flathub
-    # Shotwell — photo manager
+    # photo manager / organizer
     org.gnome.Shotwell:
       source: flathub
-    # OBS Studio
+    # screen recording & live-streaming
     com.obsproject.Studio:
       source: flathub
-    # LibreOffice
     org.libreoffice.LibreOffice:
       source: flathub
-    # Blender
     org.blender.Blender:
       source: flathub
-    # Pinta — image editor
+    # lightweight raster image editor (Paint.NET-style)
     com.github.PintaProject.Pinta:
       source: flathub
-    # Signal
     org.signal.Signal:
       source: flathub
-    # Chromium
     org.chromium.Chromium:
       source: flathub
-    # pgAdmin 4
+    # PostgreSQL admin & query GUI
     org.pgadmin.pgadmin4:
       source: flathub
-    # Spotify
     com.spotify.Client:
       source: flathub
-    # Remmina — RDP client (FreeRDP) with per-profile SSH-tunnel support
+    # RDP/VNC client — FreeRDP backend with per-profile SSH tunneling through a jump host
     org.remmina.Remmina:
       source: flathub
-    # Microsoft Teams — Electron wrapper (the browser version is gated on Linux)
+    # unofficial Teams Electron wrapper — MS gates the web app on Linux (no bg blur)
     com.github.IsmaelMartinez.teams_for_linux:
       source: flathub
-    # gopher64 — N64 emulator (ParaLLEl RDP, gamepad auto-config), successor to simple64
+    # N64 emulator — ParaLLEl RDP, gamepad auto-config; successor to simple64
     io.github.gopher64.gopher64:
       source: flathub
-    # Plex desktop (the Mac gets the `plex` cask)
+    # Plex media client (the Mac gets the `plex` cask)
     tv.plex.PlexDesktop:
       source: flathub
 
