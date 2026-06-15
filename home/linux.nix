@@ -171,10 +171,12 @@ in
   # Reconcile non-Nix packages (flatpaks, vscode extensions, pipx) via
   # dependency-manager on every `home-manager switch`. The systemd unit that runs
   # this has a stripped PATH, so explicitly add the provider binaries depend shells
-  # out to. (Additive — no --prune on Linux; the Mac converges, see home-darwin.nix.)
+  # out to. --prune CONVERGES (same as the Mac): flatpak/vscode/pipx packages not in
+  # packages.yaml are removed; the safety rail leaves a provider untouched if it
+  # declares nothing on this platform.
   home.activation.dependencyManagerInstall =
     lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       export PATH="${lib.makeBinPath [ pkgs.flatpak vscode pkgs.pipx ]}:$PATH"
-      $DRY_RUN_CMD ${depend}/bin/depend install --config ${../packages.yaml}
+      $DRY_RUN_CMD ${depend}/bin/depend install --prune --config ${../packages.yaml}
     '';
 }

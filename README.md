@@ -42,8 +42,9 @@ darwin-rebuild switch --flake .#chris-macbook
 nix flake update                                   # bump pinned inputs, then switch
 ```
 
-Switching also runs `depend` against `packages.yaml` (Linux: `depend install`; macOS:
-`depend install --prune`, which converges Homebrew to the manifest). Preview without applying:
+Switching also runs `depend install --prune` against `packages.yaml` on both hosts,
+converging the non-Nix layer (flatpak/vscode/pipx on Linux, Homebrew on macOS) to the
+manifest. Preview without applying:
 
 ```sh
 depend plan --config packages.yaml          # add --prune to also preview removals

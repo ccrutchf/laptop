@@ -13,7 +13,7 @@ Neither is part of the KastnerRG/krg-infra fleet.
 
 - **Apply (NixOS):** `sudo nixos-rebuild switch --flake .#chris-laptop`
 - **Apply (macOS):** `darwin-rebuild switch --flake .#chris-macbook`
-- Both run the home-manager activation, which runs `depend` against `packages.yaml` (Linux: `depend install`; macOS: `depend install --prune` — see below).
+- Both run the home-manager activation, which runs `depend install --prune` against `packages.yaml` — converging the non-Nix layer to the manifest on both hosts (see below).
 - **Update inputs:** `nix flake update` (or a single input), then switch.
 - **Validate without activating:** `nixos-rebuild build --flake .#chris-laptop`, or `nix build .#darwinConfigurations.chris-macbook.system`, or `nix eval .#nixosConfigurations.chris-laptop.config.system.build.toplevel.drvPath` (cheap eval). CI does this for both hosts (`.github/workflows/flake.yml`). Confirm a change builds before switching — and ALWAYS before a disk wipe.
 - **Full reinstall:** `REBUILD.md` is the index → `REBUILD-NIXOS.md` (NixOS, disko wipes the 2TB drive; Windows on the other NVMe is untouched) and `REBUILD-MAC.md` (macOS bootstrap).
@@ -30,10 +30,11 @@ hosts/
   chris-macbook/default.nix       nix-darwin host module
 modules/nixos/                    NixOS feature modules: impermanence, hibernation, secure-boot, backups, hyprland
 home/
-  common.nix                      cross-platform home-manager (shell stack, git, core CLIs) — BOTH hosts
+  common.nix                      cross-platform home-manager (shell stack, git, core CLIs, claude-backup) — BOTH hosts
   linux.nix                       Linux/desktop home (GNOME/Hyprland/flatpak/dconf/GTK/darkman) + Linux depend hook
-  darwin.nix                      macOS home + the --prune depend hook
+  darwin.nix                      macOS home + the macOS depend hook
   hyprland.nix                    Hyprland session config (imported by home/linux.nix)
+  claude-backup.nix               hourly ~/.claude snapshot to Nextcloud (systemd timer / launchd agent)
 packages.yaml                     non-Nix packages, per-platform blocks, reconciled by depend
 ```
 
@@ -52,8 +53,9 @@ packages.yaml                     non-Nix packages, per-platform blocks, reconci
 
 Both home configs pull the `depend` binary from the `dependency-manager` flake input (it is cross-platform now — the flake exposes `aarch64-darwin`) and run it from a `home.activation` hook on every switch. That hook runs with a **stripped PATH**, so every provider binary `depend` shells out to must be on the activation `PATH`:
 
-- **Linux** (`home/linux.nix`): `depend install` (additive), `PATH` via `lib.makeBinPath [ pkgs.flatpak vscode pkgs.pipx ]`.
-- **macOS** (`home/darwin.nix`): `depend install --prune` (**converges** — removes brew/cask/mas packages not in `packages.yaml`), `PATH` prepends `/opt/homebrew/bin` (where `brew`/`mas` live). Homebrew is a prerequisite — depend shells out to `brew`, it does not build it.
+Both hosts run `depend install --prune` (converge — remove installed-but-undeclared packages to match `packages.yaml`); they differ only in the providers and the `PATH`:
+- **Linux** (`home/linux.nix`): prunes flatpak/vscode/pipx; `PATH` via `lib.makeBinPath [ pkgs.flatpak vscode pkgs.pipx ]`.
+- **macOS** (`home/darwin.nix`): prunes brew/cask/mas; `PATH` prepends `/opt/homebrew/bin` (where `brew`/`mas` live). Homebrew is a prerequisite — depend shells out to `brew`, it does not build it.
 
 If you add a `packages.yaml` provider that invokes a new external binary, add that binary to the relevant activation `PATH` or the activation silently fails to find it.
 
@@ -67,7 +69,7 @@ A top-level map of named blocks. Each has filter keys (`platform`, `architecture
 - `brew:` / `cask:` / `mas:` (macOS, `platform: osx`) — Homebrew formulae / casks / Mac App Store (numeric id). `brew` never runs as sudo; a `source:` with a slash is a tap.
 - `dependencies: [<id>]` orders one package after another within the plan.
 
-**Convergence/prune (macOS):** depend's `--prune` removes installed-but-undeclared packages. A safety rail skips any provider that declares **zero** packages on the current platform — so an empty `brew:`/`cask:`/`mas:` section means depend leaves Homebrew untouched until you actually list things. This is intentionally why nix-darwin's `homebrew` module is NOT used: one `packages.yaml` drives the non-Nix layer on both machines.
+**Convergence/prune (both hosts):** depend's `--prune` removes installed-but-undeclared packages. A safety rail skips any provider that declares **zero** packages on the current platform — so an empty section (e.g. `brew:`/`cask:`/`mas:`) means depend leaves that provider untouched until you actually list things. This is intentionally why nix-darwin's `homebrew` module is NOT used: one `packages.yaml` drives the non-Nix layer on both machines.
 
 ## `my.*` feature modules (`modules/nixos/`, toggled in `hosts/chris-laptop/default.nix`)
 
