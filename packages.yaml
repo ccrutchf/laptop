@@ -9,7 +9,10 @@
 
 # ── Cross-platform ───────────────────────────────────────────────────────────
 
-# VSCode extensions on both hosts.
+# VSCode extensions on both hosts — the LEAVES (top-level extensions chosen by
+# hand). depend's prune protects pack/dependency members, so they aren't listed:
+# ms-python.python (+ pylance/debugpy) is pulled in by black-formatter/isort here,
+# Jupyter pulls its 4 helpers, etc.
 # No `requires: [code]`: that gate is checked up-front and would abort the whole
 # install on a fresh Mac, where depend installs VSCode (the cask) in the same run.
 # Instead each extension `dependencies: [visual-studio-code]` so it installs after
@@ -18,23 +21,43 @@
 vscode-extensions:
   platform: all
   vscode:
-    ms-python.python:
-      dependencies: [visual-studio-code]
-    rust-lang.rust-analyzer:
-      dependencies: [visual-studio-code]
     anthropic.claude-code:
-      dependencies: [visual-studio-code]
-    ms-dotnettools.csdevkit:
       dependencies: [visual-studio-code]
     eamodio.gitlens:
       dependencies: [visual-studio-code]
-    bbenoist.nix:
+    github.vscode-github-actions:
+      dependencies: [visual-studio-code]
+    rust-lang.rust-analyzer:
+      dependencies: [visual-studio-code]
+    swiftlang.swift-vscode:
+      dependencies: [visual-studio-code]
+    jnoortheen.nix-ide:
+      dependencies: [visual-studio-code]
+    dart-code.flutter:
+      dependencies: [visual-studio-code]
+    polymeilex.wgsl:
+      dependencies: [visual-studio-code]
+    vadimcn.vscode-lldb:
+      dependencies: [visual-studio-code]
+    ms-python.black-formatter:
+      dependencies: [visual-studio-code]
+    ms-python.isort:
+      dependencies: [visual-studio-code]
+    njpwerner.autodocstring:
+      dependencies: [visual-studio-code]
+    ms-toolsai.jupyter:
       dependencies: [visual-studio-code]
     ms-vscode-remote.remote-ssh:
       dependencies: [visual-studio-code]
     ms-vscode-remote.remote-containers:
       dependencies: [visual-studio-code]
     mkhl.direnv:
+      dependencies: [visual-studio-code]
+    ms-dotnettools.csdevkit:
+      dependencies: [visual-studio-code]
+    formulahendry.dotnet-test-explorer:
+      dependencies: [visual-studio-code]
+    redhat.vscode-yaml:
       dependencies: [visual-studio-code]
 
 
