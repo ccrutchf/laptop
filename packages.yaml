@@ -44,46 +44,61 @@ vscode-extensions:
 linux-flatpaks:
   platform: linux
   flatpak:
+    # Zen browser
     app.zen_browser.zen:
       source: flathub
+    # Nextcloud desktop client
     com.nextcloud.desktopclient.nextcloud:
       source: flathub
+    # Shotcut — video editor
     org.shotcut.Shotcut:
       source: flathub
+    # Slack
     com.slack.Slack:
       source: flathub
+    # Discord
     com.discordapp.Discord:
       source: flathub
+    # Zoom
     us.zoom.Zoom:
       source: flathub
+    # Shotwell — photo manager
     org.gnome.Shotwell:
       source: flathub
+    # OBS Studio
     com.obsproject.Studio:
       source: flathub
+    # LibreOffice
     org.libreoffice.LibreOffice:
       source: flathub
+    # Blender
     org.blender.Blender:
       source: flathub
+    # Pinta — image editor
     com.github.PintaProject.Pinta:
       source: flathub
+    # Signal
     org.signal.Signal:
       source: flathub
+    # Chromium
     org.chromium.Chromium:
       source: flathub
+    # pgAdmin 4
     org.pgadmin.pgadmin4:
       source: flathub
+    # Spotify
     com.spotify.Client:
       source: flathub
-    # RDP client (FreeRDP) with built-in per-profile SSH-tunnel support.
+    # Remmina — RDP client (FreeRDP) with per-profile SSH-tunnel support
     org.remmina.Remmina:
       source: flathub
-    # Teams Electron wrapper — the browser version is gated by Microsoft on Linux.
+    # Microsoft Teams — Electron wrapper (the browser version is gated on Linux)
     com.github.IsmaelMartinez.teams_for_linux:
       source: flathub
-    # N64 emulator (ParaLLEl RDP, gamepad auto-config) — successor to simple64.
+    # gopher64 — N64 emulator (ParaLLEl RDP, gamepad auto-config), successor to simple64
     io.github.gopher64.gopher64:
       source: flathub
-    # Plex desktop (the Mac gets the `plex` cask).
+    # Plex desktop (the Mac gets the `plex` cask)
     tv.plex.PlexDesktop:
       source: flathub
 
