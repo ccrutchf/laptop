@@ -1,4 +1,47 @@
-desktop-apps:
+# packages.yaml — non-Nix packages, reconciled by `depend`.
+#
+# Each host's home-manager activation runs `depend install --prune` against this
+# file, so every block is the source of truth: anything its providers manage that
+# is NOT listed gets removed on the next switch. One block per (platform × purpose);
+# the `platform:` key scopes it to a host — chris-laptop is `linux`, chris-macbook
+# is `osx`, `all` is both.
+
+
+# ── Cross-platform ───────────────────────────────────────────────────────────
+
+# VSCode extensions on both hosts.
+# No `requires: [code]`: that gate is checked up-front and would abort the whole
+# install on a fresh Mac, where depend installs VSCode (the cask) in the same run.
+# Instead each extension `dependencies: [visual-studio-code]` so it installs after
+# the cask symlinks `code` onto the PATH. On Linux the name is unknown (a no-op) and
+# `code` is already present from the Nix vscode.
+vscode-extensions:
+  platform: all
+  vscode:
+    ms-python.python:
+      dependencies: [visual-studio-code]
+    rust-lang.rust-analyzer:
+      dependencies: [visual-studio-code]
+    anthropic.claude-code:
+      dependencies: [visual-studio-code]
+    ms-dotnettools.csdevkit:
+      dependencies: [visual-studio-code]
+    eamodio.gitlens:
+      dependencies: [visual-studio-code]
+    bbenoist.nix:
+      dependencies: [visual-studio-code]
+    ms-vscode-remote.remote-ssh:
+      dependencies: [visual-studio-code]
+    ms-vscode-remote.remote-containers:
+      dependencies: [visual-studio-code]
+    mkhl.direnv:
+      dependencies: [visual-studio-code]
+
+
+# ── Linux · chris-laptop ─────────────────────────────────────────────────────
+
+# Desktop apps via Flathub.
+linux-flatpaks:
   platform: linux
   flatpak:
     app.zen_browser.zen:
@@ -31,102 +74,68 @@ desktop-apps:
       source: flathub
     com.spotify.Client:
       source: flathub
-    # RDP client (FreeRDP backend) with built-in per-profile SSH-tunnel support —
-    # the "SSH Tunnel" tab tunnels the RDP session through a jump host. GNOME
-    # Connections was the alternative but has no SSH tunneling.
+    # RDP client (FreeRDP) with built-in per-profile SSH-tunnel support.
     org.remmina.Remmina:
       source: flathub
-    # Teams in a browser is gated by Microsoft (Firefox/Zen → white screen; Linux
-    # browsers can't apply video background effects). This Electron wrapper presents
-    # a real Chromium UA, so it loads and gives the best shot at background blur.
+    # Teams Electron wrapper — the browser version is gated by Microsoft on Linux.
     com.github.IsmaelMartinez.teams_for_linux:
       source: flathub
-    # N64 emulator (the renamed successor to simple64, same dev). High
-    # compatibility (ParaLLEl RDP) with built-in gamepad auto-config, so the
-    # Xbox controller works out of the box.
+    # N64 emulator (ParaLLEl RDP, gamepad auto-config) — successor to simple64.
     io.github.gopher64.gopher64:
       source: flathub
-    # Plex desktop app (the Mac gets it as the `plex` cask, mac-apps block).
+    # Plex desktop (the Mac gets the `plex` cask).
     tv.plex.PlexDesktop:
       source: flathub
 
-# VSCode extensions on BOTH hosts. No `requires: [code]` here on purpose: that gate
-# is checked up-front and would abort the whole `depend install` on a fresh Mac,
-# where VSCode is installed by depend (the visual-studio-code cask) in the SAME run.
-# Instead each extension `dependencies: [visual-studio-code]` so it installs AFTER
-# the cask (which symlinks `code` into /opt/homebrew/bin, on the activation PATH).
-# On Linux that dependency is an unknown name → silently skipped, and `code` is
-# already present from the Nix-installed vscode, so they install fine.
-vscode-extensions:
-  platform: all
-  vscode:
-    ms-python.python:
-      dependencies: [visual-studio-code]
-    rust-lang.rust-analyzer:
-      dependencies: [visual-studio-code]
-    anthropic.claude-code:
-      dependencies: [visual-studio-code]
-    ms-dotnettools.csdevkit:
-      dependencies: [visual-studio-code]
-    eamodio.gitlens:
-      dependencies: [visual-studio-code]
-    bbenoist.nix:
-      dependencies: [visual-studio-code]
-    ms-vscode-remote.remote-ssh:
-      dependencies: [visual-studio-code]
-    ms-vscode-remote.remote-containers:
-      dependencies: [visual-studio-code]
-    mkhl.direnv:
-      dependencies: [visual-studio-code]
-
-data-tools:
+# e4e-data-management via pipx (CLI: `origin`). Linux x86_64 wheel from the v0.6.1
+# release; not on PyPI. pipx comes from Nix on the activation PATH.
+linux-data-tools:
   platform: linux
   architecture: amd64
   pipx:
-    # Prebuilt cp311-abi3 wheel from the v0.6.1 GitHub release (CLI: `origin`).
     e4e-data-management:
       url: https://github.com/UCSD-E4E/e4e-data-management/releases/download/v0.6.1/e4e_data_management-0.6.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
-data-tools-mac:
-  platform: osx
-  architecture: arm64
-  pipx:
-    # Same tool, the macOS arm64 wheel from the same v0.6.1 release (CLI: `origin`).
-    # pipx comes from Nix on the activation PATH (home/darwin.nix).
-    e4e-data-management:
-      url: https://github.com/UCSD-E4E/e4e-data-management/releases/download/v0.6.1/e4e_data_management-0.6.1-cp311-abi3-macosx_11_0_arm64.whl
 
-# macOS (chris-macbook). depend drives Homebrew here — the home-manager activation
-# runs `depend install --prune` (home/darwin.nix), so this block IS the source of
-# truth: brew/cask/mas packages NOT listed get removed on `darwin-rebuild switch`.
-# brew never runs as sudo; a formula/cask `source:` containing a slash is a tap.
-#
-# Starting minimal on purpose (re-approve apps as you go). NOTE: while a section is
-# empty, depend's prune safety-rail leaves that provider untouched — so nothing is
-# removed until you actually declare entries here. macfuse is intentionally dropped.
+# ── macOS · chris-macbook ────────────────────────────────────────────────────
+
+# Homebrew (brew formulae, cask GUI apps) + Mac App Store (mas). brew never runs as
+# sudo; a `source:` containing a slash is a tap. Cask/mas tokens are verified before
+# adding (against the Homebrew cask / App Store).
 mac-apps:
   platform: osx
   brew:
-    # iOS / dev toolchain (uncomment what you want managed):
-    # cocoapods:
-    # fastlane:
-    # swiftlint:
-    # rbenv:
-    # git-lfs:
+    # iOS / dev toolchain goes here as you re-approve it (cocoapods, fastlane,
+    # swiftlint, rbenv, …). Empty → prune leaves brew formulae untouched.
   cask:
-    # GUI apps via Homebrew cask (tokens verified against the Homebrew cask API).
-    zen:                  # Zen browser (cask is `zen`, not `zen-browser`)
+    # Zen browser (cask `zen`, not `zen-browser`).
+    zen:
     spotify:
     chromium:
     zoom:
-    nextcloud:            # Nextcloud desktop client (cask is `nextcloud`)
+    # Nextcloud desktop client (cask `nextcloud`).
+    nextcloud:
     slack:
     discord:
-    visual-studio-code:   # also provides the `code` CLI on PATH
+    signal:
+    # Also provides the `code` CLI on PATH (see vscode-extensions above).
+    visual-studio-code:
     pinta:
-    microsoft-office:     # full Office suite (Word/Excel/PowerPoint/Outlook/OneNote)
-    plex:                 # Plex desktop app
+    # Full Office suite (Word/Excel/PowerPoint/Outlook/OneNote).
+    microsoft-office:
+    # Plex desktop app.
+    plex:
   mas:
     # Mac App Store apps, keyed by numeric id (find via `mas search <name>`).
-    "497799835":          # Xcode (App Store only — not a Homebrew cask)
+    # Xcode is App Store only — not a Homebrew cask.
+    "497799835":
       name: Xcode
+
+# e4e-data-management via pipx (CLI: `origin`). Same tool as the Linux block, the
+# macOS arm64 wheel from the same v0.6.1 release.
+mac-data-tools:
+  platform: osx
+  architecture: arm64
+  pipx:
+    e4e-data-management:
+      url: https://github.com/UCSD-E4E/e4e-data-management/releases/download/v0.6.1/e4e_data_management-0.6.1-cp311-abi3-macosx_11_0_arm64.whl
