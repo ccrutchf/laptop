@@ -97,6 +97,7 @@ mac-apps:
     nextcloud:            # Nextcloud desktop client (cask is `nextcloud`)
     slack:
     discord:
+    visual-studio-code:   # also provides the `code` CLI on PATH
   mas:
     # Mac App Store apps, keyed by numeric id (find via `mas search <name>`):
     # "497799835":   # Xcode
