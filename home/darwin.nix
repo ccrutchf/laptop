@@ -16,9 +16,9 @@ in
 
   home.homeDirectory = "/Users/chris";
 
-  # Forward-looking: `depend update`'s macOS path will gain a `darwin-rebuild switch`
-  # step (mirroring the nixos-rebuild step) keyed off this var. Not consumed yet —
-  # set now so it's ready when that depend feature lands.
+  # `depend update` reads this to run the nix-darwin system update on macOS —
+  # `nix flake update` + `sudo darwin-rebuild switch --flake <ref>` — mirroring the
+  # nixos-rebuild step (DEPEND_NIXOS_FLAKE) on the Linux host.
   home.sessionVariables.DEPEND_DARWIN_FLAKE = "${config.home.homeDirectory}/Repos/personal/laptop#chris-macbook";
 
   # Mac-specific Nix packages. Start minimal — GUI apps + the iOS/dev toolchain
