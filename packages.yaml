@@ -46,6 +46,9 @@ desktop-apps:
     # Xbox controller works out of the box.
     io.github.gopher64.gopher64:
       source: flathub
+    # Plex desktop app (the Mac gets it as the `plex` cask, mac-apps block).
+    tv.plex.PlexDesktop:
+      source: flathub
 
 vscode-extensions:
   platform: linux
@@ -97,7 +100,9 @@ mac-apps:
     discord:
     visual-studio-code:   # also provides the `code` CLI on PATH
     pinta:
+    microsoft-office:     # full Office suite (Word/Excel/PowerPoint/Outlook/OneNote)
+    plex:                 # Plex desktop app
   mas:
-    # Mac App Store apps, keyed by numeric id (find via `mas search <name>`):
-    # "497799835":   # Xcode
-    #   name: Xcode
+    # Mac App Store apps, keyed by numeric id (find via `mas search <name>`).
+    "497799835":          # Xcode (App Store only — not a Homebrew cask)
+      name: Xcode
