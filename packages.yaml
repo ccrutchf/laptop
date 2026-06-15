@@ -89,9 +89,14 @@ mac-apps:
     # rbenv:
     # git-lfs:
   cask:
-    # GUI apps via Homebrew cask:
-    # visual-studio-code:
-    # zen-browser:
+    # GUI apps via Homebrew cask (tokens verified against the Homebrew cask API).
+    zen:                  # Zen browser (cask is `zen`, not `zen-browser`)
+    spotify:
+    chromium:
+    zoom:
+    nextcloud:            # Nextcloud desktop client (cask is `nextcloud`)
+    slack:
+    discord:
   mas:
     # Mac App Store apps, keyed by numeric id (find via `mas search <name>`):
     # "497799835":   # Xcode
