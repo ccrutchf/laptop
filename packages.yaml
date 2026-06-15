@@ -31,8 +31,6 @@ desktop-apps:
       source: flathub
     com.spotify.Client:
       source: flathub
-    com.onepassword.OnePassword:
-      source: flathub
     # RDP client (FreeRDP backend) with built-in per-profile SSH-tunnel support —
     # the "SSH Tunnel" tab tunnels the RDP session through a jump host. GNOME
     # Connections was the alternative but has no SSH tunneling.
@@ -98,6 +96,7 @@ mac-apps:
     slack:
     discord:
     visual-studio-code:   # also provides the `code` CLI on PATH
+    pinta:
   mas:
     # Mac App Store apps, keyed by numeric id (find via `mas search <name>`):
     # "497799835":   # Xcode
