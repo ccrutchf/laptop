@@ -33,28 +33,33 @@ let
       ${src} ${dest}/
   '';
 in
-# optionalAttrs (not mkIf) so the platform-irrelevant option namespace is never
-# even referenced — `launchd` doesn't exist on Linux HM, `systemd.user` is a no-op
-# on darwin; emitting only the right one keeps both hosts evaluating cleanly.
-lib.optionalAttrs (!isDarwin) {
-  systemd.user.services.claude-backup = {
+# Platform split via mkIf, NOT optionalAttrs. optionalAttrs makes the SET of
+# top-level option paths depend on `isDarwin` (= pkgs.stdenv…); since `pkgs` is
+# resolved through config._module.args, that's an infinite recursion — the module
+# fixpoint needs the option paths to build `pkgs`, but the paths need `pkgs`. mkIf
+# keeps the paths static and defers only the VALUE, breaking the cycle. Both
+# namespaces are declared on both platforms by home-manager (systemd.user.* and
+# launchd.agents.* exist but stay inert off-platform — systemd.user.enable
+# defaults to isLinux, launchd.enable to isDarwin), so naming the wrong-platform
+# option here is harmless as long as we never enable it on that platform.
+{
+  systemd.user.services.claude-backup = lib.mkIf (!isDarwin) {
     Unit.Description = "Snapshot ~/.claude into the Nextcloud-synced Documents tree";
     Service = {
       Type = "oneshot";
       ExecStart = "${backup}";
     };
   };
-  systemd.user.timers.claude-backup = {
+  systemd.user.timers.claude-backup = lib.mkIf (!isDarwin) {
     Unit.Description = "Hourly snapshot of ~/.claude for Nextcloud";
     Timer = { OnCalendar = "hourly"; Persistent = true; };
     Install.WantedBy = [ "timers.target" ];
   };
-}
-// lib.optionalAttrs isDarwin {
+
   # launchd has no ExecStartPre or Persistent catch-up; RunAtLoad re-runs at login
   # so a window missed while asleep/logged-out heals (closest to the timer's
   # Persistent=true).
-  launchd.agents.claude-backup = {
+  launchd.agents.claude-backup = lib.mkIf isDarwin {
     enable = true;
     config = {
       ProgramArguments = [ "${backup}" ];
