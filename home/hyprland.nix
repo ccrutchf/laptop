@@ -252,7 +252,13 @@ in
       input = {
         kb_layout = "us";
         numlock_by_default = true;
-        follow_mouse = 1;
+        # 2 (not the default 1): hovering a window does NOT move keyboard focus,
+        # but the hovered window still receives mouse events (scroll/click). With
+        # 1, focus follows the cursor, so moving the mouse over another window
+        # mid-gesture (e.g. while reaching for Ctrl+C after selecting text)
+        # hijacks the keystroke into the hovered window and the copy targets the
+        # wrong window. 2 keeps keyboard focus put while preserving scroll-on-hover.
+        follow_mouse = 2;
         touchpad = {
           natural_scroll = false;
           tap-to-click = true;
@@ -324,6 +330,17 @@ in
         "no_initial_focus on, match:title ^(Picture(-| )in(-| )Picture)$"
         "size 480 270, match:title ^(Picture(-| )in(-| )Picture)$"
         "move 100%-500 100%-290, match:title ^(Picture(-| )in(-| )Picture)$"
+
+        # Zoom screen-share annotation toolbar. When you click "Annotate" while
+        # WATCHING a share, Zoom spawns a separate overlay window (class `zoom`,
+        # title `annotate_toolbar`, XWayland). By default Hyprland TILES it — that
+        # geometry fight makes Zoom open it and immediately abandon it, so it
+        # flickers open/closed in a loop. Float it (and pin it above the share) so
+        # Zoom can place it as the free-floating palette it expects. Match on TITLE:
+        # class `zoom` is shared with the main "Meeting" window, so only the title
+        # distinguishes the toolbar.
+        "float on, match:title ^(annotate_toolbar)$"
+        "pin on, match:title ^(annotate_toolbar)$"
       ];
 
       # --- Keybinds (see the cheat-sheet comment at the end of this file) ---
