@@ -357,6 +357,21 @@
           hash = "sha256-dz3gpE464jnmSDsAsmJHcxUsEKeUURNoUjgGU2214Xg=";
         };
       });
+
+      # wivrn 26.6 — nixpkgs still ships 26.2.3, but the Quest headset's WiVRn
+      # client auto-updated to 26.6 and the server/client protocol must match or
+      # the streamer refuses the session. This is nixpkgs PR #531078 (a one-file
+      # package-only bump, fully reviewed + green CI, queued for merge) applied as
+      # an overlay: callPackage the PR's package.nix straight from the maintainer's
+      # branch. The new version is API-compatible, so services.wivrn below needs no
+      # changes. Drop this once #531078 lands and unstable catches up (gh pr view
+      # 531078 -R NixOS/nixpkgs --json state).
+      wivrn = prev.callPackage
+        (final.fetchurl {
+          url = "https://raw.githubusercontent.com/PassiveLemon/nixpkgs/67a2cb0ba141df83a9b5625b54d0a9023ebd05f2/pkgs/by-name/wi/wivrn/package.nix";
+          hash = "sha256-95RL8JYD2kzPUgyMzjWOaKT2RU5VAsmEyyDnCX/ESmg=";
+        })
+        {};
     })
   ];
 
