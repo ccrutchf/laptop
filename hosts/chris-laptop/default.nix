@@ -87,17 +87,16 @@
   # services.displayManager.gdm.enable = true;
   # services.desktopManager.gnome.enable = true;
 
-  # File manager: Thunar (XFCE). Replaces GNOME Files now that GNOME is gone.
-  # The NixOS module wires up the D-Bus side Thunar needs to be fully featured:
-  #   - gvfs    -> trash, network shares, and auto-mounting removable drives
-  #   - tumbler -> thumbnails for images/PDFs/video
-  #   - plugins -> archive extract/create (right-click) + removable-media handling
-  programs.thunar = {
-    enable = true;
-    plugins = with pkgs.xfce; [ thunar-archive-plugin thunar-volman ];
-  };
+  # File manager: Dolphin (KDE). Replaces Thunar — Thunar's archive plugin is only
+  # a frontend and we never installed a backend, so Compress/Extract failed with
+  # "No suitable archive manager found"; Dolphin bundles that via Ark. The D-Bus
+  # plumbing Dolphin leans on:
+  #   - gvfs    -> trash + network shares (GTK apps share it too)
+  #   - udisks2 -> Solid device notifier: auto-mount removable drives
+  # Dolphin/Ark/thumbnailers are user packages (home/linux.nix); Qt/Breeze theming
+  # is wired through the home-manager `qt` module there.
   services.gvfs.enable = true;
-  services.tumbler.enable = true;
+  services.udisks2.enable = true;
 
   # Login greeter: greetd + ReGreet, run INSIDE a dedicated Hyprland instance.
   #

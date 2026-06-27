@@ -42,6 +42,20 @@ in
     keepass
     jetbrains-toolbox  # JetBrains IDE manager; IDEs it installs run via nix-ld
     papers             # GNOME Document Viewer (ex-Evince) — PDF reader
+
+    # Dolphin (KDE file manager) + supporting cast. System half (gvfs, udisks2)
+    # is in hosts/chris-laptop/default.nix; Qt/Breeze theming via the `qt` block
+    # below. Ark is what gives the right-click Compress/Extract Thunar lacked.
+    kdePackages.dolphin
+    kdePackages.dolphin-plugins        # adds Ark "Compress/Extract here" + VCS menu items
+    kdePackages.ark                    # archive backend: zip/tar/7z/rar
+    kdePackages.kio-extras             # extra KIO protocols (sftp, mtp, fish, …)
+    kdePackages.kdegraphics-thumbnailers
+    kdePackages.ffmpegthumbs           # video thumbnails in Dolphin
+    kdePackages.breeze-icons           # icon theme Dolphin's UI expects
+
+    unzip              # CLI zip extraction (unzip, zipinfo)
+    zip                # CLI zip creation
   ];
 
   # Default browser = Zen (the Flatpak). Writes ~/.config/mimeapps.list, which GNOME
@@ -55,6 +69,7 @@ in
       "x-scheme-handler/about" = "app.zen_browser.zen.desktop";
       "x-scheme-handler/unknown" = "app.zen_browser.zen.desktop";
       "application/pdf" = "org.gnome.Papers.desktop";
+      "inode/directory" = "org.kde.dolphin.desktop";  # open folders in Dolphin
     };
   };
 
@@ -100,6 +115,39 @@ in
       package = pkgs.adwaita-icon-theme;
     };
   };
+
+  # Qt theming for Dolphin/Ark. The KDE platform theme (plasma-integration) reads
+  # the Breeze color scheme from kdeglobals; `style.name = "breeze"` sets the
+  # widget style. This sets QT_QPA_PLATFORMTHEME=kde + QT_STYLE_OVERRIDE=breeze and
+  # pulls kio/plasma-integration/breeze into the profile.
+  qt = {
+    enable = true;
+    platformTheme.name = "kde";
+    style.name = "breeze";
+  };
+
+  # Pin Dolphin/Qt to Breeze DARK to match the always-dark Hyprland shell (waybar,
+  # terminal). darkman still flips GTK apps light/dark; following it for Qt too
+  # would mean `plasma-apply-colorscheme` (i.e. dragging in plasma-workspace),
+  # which isn't worth it for one file manager. KDE apps persist UI state into
+  # kdeglobals, so seed a WRITABLE copy rather than symlinking it read-only — only
+  # if absent, so the user (or KDE) can edit it freely. Delete it to re-seed.
+  home.activation.seedKdeglobals = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    kdeglobals="${config.xdg.configHome}/kdeglobals"
+    if [ ! -e "$kdeglobals" ]; then
+      $DRY_RUN_CMD install $VERBOSE_ARG -Dm644 \
+        ${pkgs.writeText "kdeglobals-seed" ''
+          [General]
+          ColorScheme=BreezeDark
+
+          [Icons]
+          Theme=breeze-dark
+
+          [KDE]
+          widgetStyle=Breeze
+        ''} "$kdeglobals"
+    fi
+  '';
 
   dconf.settings = {
     # Fractional scaling (needed for 125% etc.). Takes effect on next login.
