@@ -8,8 +8,8 @@
 # them to the Hyprland session. The HM modules below are used only to GENERATE
 # config / install binaries (waybar has systemd.enable = false for this reason).
 #
-# Basic, first-time-tiling setup: ghostty (terminal), wofi (launcher), Waybar
-# (bar), mako (notifications), hyprpaper (wallpaper), hyprlock + hypridle
+# Basic, first-time-tiling setup: ghostty (terminal), walker (launcher), Waybar
+# (bar), swaync (notifications + quick-settings), hyprpaper (wallpaper), hyprlock + hypridle
 # (lock + idle). Swap the wallpaper by editing hyprpaper.conf below.
 { config, lib, pkgs, ... }:
 
@@ -97,21 +97,36 @@ let
   '';
 
   # Pre-lock "idle dim" warning (mirrors the old GNOME fade): ~30s before the
-  # lock fires, fade the backlight down to 10% as a heads-up. `brightnessctl -s`
-  # saves the real level first so the listener's on-resume (`-r`) snaps it back
-  # the instant there's any activity — or it just proceeds to lock if ignored.
+  # lock fires, fade the screen down to 30% as a heads-up. Uses a SOFTWARE gamma
+  # dim (wl-gammarelay-rs, started from exec-once) rather than the sysfs backlight
+  # so it covers EVERY output. brightnessctl only drives the laptop's eDP sysfs
+  # backlight; external monitors over DP have no sysfs backlight, so the old fade
+  # was a silent no-op on them when docked — and clamshell-docked (eDP disabled)
+  # gave no warning at all. Gamma applies to all wl_outputs uniformly. The current
+  # Brightness is saved to a runtime file so on-resume restores whatever it was.
   idleDim = pkgs.writeShellScript "hypr-idle-dim" ''
-    brightnessctl -s >/dev/null                         # save current level
-    max=$(brightnessctl max)
-    cur=$(( $(brightnessctl get) * 100 / max ))
-    target=10
-    [ "$cur" -le "$target" ] && exit 0
-    while [ "$cur" -gt "$target" ]; do                  # fade over ~0.8s
-      cur=$(( cur - 5 ))
-      [ "$cur" -lt "$target" ] && cur=$target
-      brightnessctl set "''${cur}%" >/dev/null
+    saved="$XDG_RUNTIME_DIR/hypr-idle-dim.brightness"
+    get() { busctl --user get-property rs.wl-gammarelay / rs.wl.gammarelay Brightness 2>/dev/null | awk '{print $2}'; }
+    setb() { busctl --user set-property rs.wl-gammarelay / rs.wl.gammarelay Brightness d "$1"; }
+    cur=$(get); [ -z "$cur" ] && cur=1.0       # default if the daemon's not up yet
+    printf '%s\n' "$cur" > "$saved"            # remember it for on-resume
+    pct=$(awk -v c="$cur" 'BEGIN { printf "%d", c * 100 }')
+    target=30
+    [ "$pct" -le "$target" ] && exit 0
+    while [ "$pct" -gt "$target" ]; do         # fade over ~0.8s
+      pct=$(( pct - 5 ))
+      [ "$pct" -lt "$target" ] && pct=$target
+      setb "$(awk -v p="$pct" 'BEGIN { printf "%.2f", p / 100 }')"
       sleep 0.05
     done
+  '';
+
+  # on-resume companion: snap the saved brightness back the instant there's any
+  # activity (or it's restored after unlock if the dim proceeded to a full lock).
+  idleUndim = pkgs.writeShellScript "hypr-idle-undim" ''
+    saved="$XDG_RUNTIME_DIR/hypr-idle-dim.brightness"
+    b=$(cat "$saved" 2>/dev/null); [ -z "$b" ] && b=1.0
+    busctl --user set-property rs.wl-gammarelay / rs.wl.gammarelay Brightness d "$b"
   '';
 
   # Monitor setup: reassert clamshell + fix the 4K modeset race. Runs at startup
@@ -130,9 +145,72 @@ let
       hyprctl keyword monitor "desc:Samsung Electric Company LU28R55 HCJW902122,disable"
       hyprctl keyword monitor "desc:Samsung Electric Company LU28R55 HCJW902122,preferred,0x0,1.25"
     fi
+    # ASUS-desk eDP scale. The 15" 4K internal panel at the default 1.5x is too
+    # small at this desk, so bump eDP-1 to 2.0x (logical 1920x1080) whenever the
+    # ASUS VS238 is present — direct or via its dock, the monitor enumerates the
+    # same either way. Reset to 1.5x when it's absent so re-running this on
+    # undock ($mod+SHIFT+M) restores the default. Skipped while clamshell-docked
+    # (lid shut -> eDP disabled above): only re-scale a panel that's in use, and
+    # don't fight the Samsung clamshell case. eDP's logical width shrinks
+    # 2560->1920 at 2.0x, so re-place the ASUS to its right (it sits right of the
+    # laptop, as the catch-all rule placed it at 1.5x).
+    if ! grep -qil closed /proc/acpi/button/lid/*/state; then
+      if hyprctl monitors 2>/dev/null | grep -q 'ASUS VS238'; then
+        hyprctl keyword monitor "eDP-1,preferred,0x0,2.0"
+        hyprctl keyword monitor "desc:Ancor Communications Inc ASUS VS238 G6LMTF140248,preferred,1920x0,1"
+      else
+        hyprctl keyword monitor "eDP-1,preferred,auto,1.5"
+      fi
+    fi
+    # Default audio sink follows the desk. Match sinks by the EDID monitor name
+    # PipeWire stamps into node.nick ("Samsung LU28R55", "ASUS VS238") or by the
+    # stable node.name for the laptop Speaker — NOT the HDMI1/2/3 index, which can
+    # swap across boots like the DP-x video connectors. Rule: at the Samsung 4K
+    # desk route to the monitor's audio; everywhere else (ASUS desk, undocked) use
+    # the laptop speakers. wpctl is on the session PATH (the volume keybinds use it
+    # too). If the Samsung match ever misses, run `wpctl inspect <sink>` at that
+    # desk and widen the LU28R55 pattern below.
+    sink_for() {
+      # Retry for ~5s: the Samsung disable->re-enable above tears down and
+      # recreates the DP link, so its HDMI audio sink vanishes from PipeWire and
+      # re-registers a beat later. Without the wait, sink_for runs in that gap,
+      # finds nothing, and the caller leaves the default on the laptop Speaker
+      # (the bug). The laptop Speaker never disappears, so its lookup returns on
+      # the first pass — only a genuinely-absent sink actually spins here.
+      for _ in $(seq 1 10); do
+        for id in $(wpctl status | sed -n '/Sinks:/,/Sources:/p' | sed -nE 's/^[^0-9]*([0-9]+)[.].*/\1/p'); do
+          if wpctl inspect "$id" 2>/dev/null | grep -qiE "node[.](name|nick) = \".*($1).*\""; then
+            printf '%s\n' "$id"; return 0
+          fi
+        done
+        sleep 0.5
+      done
+    }
+    if hyprctl monitors 2>/dev/null | grep -q LU28R55; then
+      sink=$(sink_for 'LU28R55')          # Samsung 4K desk -> the monitor's audio
+    else
+      sink=$(sink_for 'Speaker')          # ASUS desk + undocked -> laptop speakers
+    fi
+    [ -n "$sink" ] && wpctl set-default "$sink"
     # Toggling a monitor leaves Waybar's bar on it dead (Waybar doesn't re-place
     # itself), so restart Waybar to redraw bars on the current outputs.
     pkill waybar 2>/dev/null; sleep 0.3; hyprctl dispatch exec waybar >/dev/null 2>&1
+  '';
+
+  # Quick audio-output picker — the GNOME "pick an output device" submenu, as a
+  # tofi list. Lists sinks by the human description wpctl prints, sets the chosen
+  # one as default; WirePlumber migrates active streams to the new default on its
+  # own (no per-stream move needed). Bound to $mod+O and the swaync "Output"
+  # button. Pairs with the desk-following default in monitorSetup above — this is
+  # the MANUAL override for when you want headphones/speakers mid-session.
+  audioSwitcher = pkgs.writeShellScript "hypr-audio-switcher" ''
+    sinks=$(wpctl status | sed -n '/Sinks:/,/Sources:/p' \
+      | sed -nE 's/^[^0-9]*([0-9]+)\. +(.+) \[vol.*/\1\t\2/p')
+    [ -z "$sinks" ] && exit 0
+    choice=$(printf '%s\n' "$sinks" | cut -f2- | ${pkgs.tofi}/bin/tofi --prompt-text "Output: ")
+    [ -z "$choice" ] && exit 0
+    id=$(printf '%s\n' "$sinks" | ${pkgs.gawk}/bin/awk -F'\t' -v c="$choice" '$2==c{print $1; exit}')
+    [ -n "$id" ] && wpctl set-default "$id"
   '';
 
   # Secret Service handoff to the PAM-unlocked keyring. pam_gnome_keyring (the
@@ -183,6 +261,10 @@ in
       #   Samsung 28" 4K  @1.25x -> logical 3072x1728, at the origin (left)
       #   Dell 23" 1080p  @1x    -> placed right of it (x = 3072)
       #   eDP-1 internal 15" 4K @1.5x -> undocked use (eDP-1 name IS stable)
+      # eDP-1's 1.5x here is the DEFAULT; at the ASUS VS238 desk monitorSetup
+      # overrides it to 2.0x (the 4K panel is too small at 1.5x there). The ASUS
+      # itself isn't pinned below — it lands on the catch-all and monitorSetup
+      # owns its geometry, so workspaces float onto it (no default-workspace bind).
       monitor = [
         "desc:Samsung Electric Company LU28R55 HCJW902122, preferred, 0x0, 1.25"
         "desc:Dell Inc. DELL E2318HR 5JDGK74BAJFL, preferred, 3072x0, 1"
@@ -235,11 +317,31 @@ in
         # fresh, LOCKED keyring daemon and get a gcr password prompt every time.
         "${keyringInit}"
         "waybar"
-        "mako"
+        # Notifications AND the quick-settings panel (volume/brightness sliders,
+        # media, DND, toggle grid). Replaces mako — one daemon does both. Toggle
+        # the panel with $mod+N or the Waybar bell. Config: xdg.configFile below.
+        "swaync"
+        # Tray status menus (GNOME-style): Bluetooth + network. The Waybar
+        # network module shows inline signal %; nm-applet adds the click-to-pick
+        # Wi-Fi menu the bar module can't. blueman-applet is the only BT indicator.
+        "blueman-applet"
+        "nm-applet --indicator"
         "${wallpaperSlideshow}"
+        # Software gamma/brightness daemon (DBus rs.wl-gammarelay). Drives the
+        # pre-lock idle dim across ALL outputs, including external monitors that
+        # have no sysfs backlight. Must be up before hypridle's first dim fires.
+        "${pkgs.wl-gammarelay-rs}/bin/wl-gammarelay-rs"
         "hypridle"
         # Startup monitor setup (clamshell + 4K modeset fix). Also on $mod+SHIFT+M.
         "${monitorSetup}"
+        # Launcher: walker (2.x) is only the GTK frontend — it talks to elephant,
+        # a separate backend daemon that supplies every provider (apps, calc,
+        # files, clipboard, websearch…). Both must run for ALT+Space / $mod+D to
+        # work; elephant first so it's listening before walker connects. Bare
+        # `walker` only signals the already-running service, so the keybinds need
+        # walker --gapplication-service up.
+        "${pkgs.elephant}/bin/elephant"
+        "${pkgs.walker}/bin/walker --gapplication-service"
         # Auto-launch the scratchpad apps at login. The windowrules below park
         # them on their special workspaces with `silent`, so focus doesn't jump
         # to a scratchpad as they come up in the background. Discord -> chat,
@@ -247,6 +349,10 @@ in
         # with the login env, not the stripped home.activation PATH.)
         "flatpak run com.discordapp.Discord"
         "flatpak run com.spotify.Client"
+        # Nextcloud sync client — uploads the hourly ~/.claude snapshot (and the
+        # rest of the synced tree) offsite. --background starts it straight to the
+        # waybar tray instead of popping the main window at every login.
+        "flatpak run com.nextcloud.desktopclient.nextcloud --background"
       ];
 
       input = {
@@ -260,10 +366,17 @@ in
         # wrong window. 2 keeps keyboard focus put while preserving scroll-on-hover.
         follow_mouse = 2;
         touchpad = {
-          natural_scroll = false;
+          natural_scroll = true;   # content tracks finger direction (macOS-style)
           tap-to-click = true;
         };
       };
+
+      # Three-finger horizontal swipe moves between workspaces. Hyprland 0.49+
+      # replaced the old `gestures { workspace_swipe = … }` block with this
+      # `gesture = <fingers>, <direction>, <action>` keyword. Direction tracks the
+      # natural_scroll setting above, so swipe-left/right feels consistent with
+      # two-finger scrolling.
+      gesture = "3, horizontal, workspace";
 
       general = {
         gaps_in = 4;
@@ -341,19 +454,49 @@ in
         # distinguishes the toolbar.
         "float on, match:title ^(annotate_toolbar)$"
         "pin on, match:title ^(annotate_toolbar)$"
+
+        # Bitwarden passkey / unlock popup. Bitwarden is an EXTENSION inside Zen,
+        # so the popup it spawns for passkey auth (and autofill-unlock) is a Zen
+        # browser window — same `class` (app.zen_browser.zen) as a normal tab, so
+        # like the PiP rule above we can only tell it apart by TITLE. Firefox/Zen
+        # title extension popup windows `Extension: (<name>) …`; the
+        # `Bitwarden Password Manager` prefix is stable across the passkey/unlock
+        # flows. Left TILED, Hyprland and the popup fight over geometry — the popup
+        # keeps requesting its own size while dwindle re-tiles it — so the window
+        # visibly ALTERNATES between a half tile and full screen. Float it (Bitwarden
+        # expects a free-floating dialog) and center it at a dialog size to end the
+        # fight. `\(` matches the literal paren in the title.
+        "float on, match:title ^(Extension: \\(Bitwarden Password Manager\\).*)$"
+        "center on, match:title ^(Extension: \\(Bitwarden Password Manager\\).*)$"
+        "size 480 640, match:title ^(Extension: \\(Bitwarden Password Manager\\).*)$"
+
+        # GNOME-replacement settings dialogs (the quick-settings stack above):
+        # transient config windows, not tiling clients — float + center them like
+        # the dialogs above. Classes verified via `hyprctl clients`:
+        # nm-connection-editor, pwvucontrol (reverse-DNS id), blueman-manager
+        # (wrapped → leading dot, so match loosely).
+        "float on, match:class ^(nm-connection-editor)$"
+        "center on, match:class ^(nm-connection-editor)$"
+        "float on, match:class ^(com.saivert.pwvucontrol)$"
+        "center on, match:class ^(com.saivert.pwvucontrol)$"
+        "float on, match:class ^(.*blueman-manager.*)$"
+        "center on, match:class ^(.*blueman-manager.*)$"
       ];
 
       # --- Keybinds (see the cheat-sheet comment at the end of this file) ---
       bind = [
         "$mod, Return, exec, ghostty"
-        "ALT, space, exec, wofi --show drun"
-        "$mod, D, exec, wofi --show drun"
+        "ALT, space, exec, walker"
+        "$mod, D, exec, walker"
         "$mod, W, killactive,"
         "$mod, M, exit,"
         "$mod, V, togglefloating,"
         "$mod, F, fullscreen,"
         "$mod, L, exec, hyprlock"
         "$mod SHIFT, M, exec, ${monitorSetup}"
+        # Quick-settings / notification panel (swaync) and manual audio-output picker.
+        "$mod, N, exec, swaync-client -t -sw"
+        "$mod, O, exec, ${audioSwitcher}"
         "$mod, P, pseudo,"
         "$mod, J, layoutmsg, togglesplit"
         "$mod, S, togglespecialworkspace, chat"
@@ -434,7 +577,7 @@ in
     enable = true;
     settings = {
       theme = "Catppuccin Mocha";   # always dark, regardless of the desktop's
-                                    # darkman light/dark state (matches Waybar/mako)
+                                    # darkman light/dark state (matches Waybar/swaync)
       font-family = "JetBrainsMono Nerd Font";                 # already in fonts.packages
       font-size = 12;
       background-opacity = 0.95;        # subtle; Hyprland blurs it if blur is on
@@ -474,7 +617,7 @@ in
       height = 30;
       modules-left = [ "hyprland/workspaces" ];
       modules-center = [ "clock" ];
-      modules-right = [ "pulseaudio" "network" "custom/battery" "tray" ];
+      modules-right = [ "pulseaudio" "network" "custom/battery" "tray" "custom/notification" ];
 
       "hyprland/workspaces".format = "{id}";
       clock.format = "{:%a %d %b  %I:%M %p}";
@@ -484,23 +627,50 @@ in
         tooltip = false;
       };
       network = {
+        on-click = "nm-connection-editor";   # GNOME "Network settings"
         format-wifi = " {signalStrength}%";
         format-ethernet = "󰈀 wired";
         format-disconnected = "⚠ offline";
       };
       pulseaudio = {
         format = "{volume}% {icon}";
+        scroll-step = 5;
+        on-click = "pwvucontrol";             # full Sound settings (device/profiles/per-app)
+        on-click-right = "${audioSwitcher}";  # quick output picker (tofi)
+        on-click-middle = "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle";
         format-muted = " muted";
         format-icons.default = [ "" "" "" ];
       };
       tray.spacing = 10;
+      # swaync bell: notification count + DND state; click opens the quick-settings
+      # panel, right-click toggles Do-Not-Disturb. The GNOME quick-settings entry
+      # point on the bar. (Glyphs are Nerd Font bell icons.)
+      "custom/notification" = {
+        tooltip = false;
+        format = "{icon}";
+        format-icons = {
+          notification = "󰂚";
+          none = "󰂜";
+          dnd-notification = "󰂛";
+          dnd-none = "󰪑";
+          inhibited-notification = "󰂚";
+          inhibited-none = "󰂜";
+          dnd-inhibited-notification = "󰂛";
+          dnd-inhibited-none = "󰪑";
+        };
+        return-type = "json";
+        exec = "swaync-client -swb";
+        on-click = "swaync-client -t -sw";
+        on-click-right = "swaync-client -d -sw";
+        escape = true;
+      };
     };
     style = ''
       * { font-family: "JetBrainsMono Nerd Font", "Font Awesome 6 Free"; font-size: 13px; }
       window#waybar { background: rgba(30,30,46,0.85); color: #cdd6f4; }
       #workspaces button { padding: 0 8px; color: #cdd6f4; }
       #workspaces button.active { background: #585b70; }
-      #clock, #custom-battery, #network, #pulseaudio, #tray { padding: 0 10px; }
+      #clock, #custom-battery, #network, #pulseaudio, #tray, #custom-notification { padding: 0 10px; }
       /* Font Awesome battery glyphs are wide and clip on the right edge; the
          module is custom-named (#custom-battery, not #battery) and sits last,
          so give it extra right padding. */
@@ -543,7 +713,7 @@ in
     listener {
         timeout = 270
         on-timeout = ${idleDim}
-        on-resume = brightnessctl -r
+        on-resume = ${idleUndim}
     }
     listener {
         timeout = 300
@@ -563,22 +733,156 @@ in
     }
   '';
 
-  # Minimal notification daemon config (started via exec-once).
-  xdg.configFile."mako/config".text = ''
-    default-timeout=5000
-    background-color=#1e1e2e
-    text-color=#cdd6f4
-    border-color=#585b70
-    border-radius=6
+  # swaync — notifications + the quick-settings panel (started via exec-once;
+  # NOT the services.swaync systemd unit, since this session launches its daemons
+  # from Hyprland exec-once, see the header comment). Built as a Nix attrset via
+  # toJSON so the JSON can't drift out of syntax and the Output button can splice
+  # in the audioSwitcher store path. Widgets, top→bottom: title (Clear-All),
+  # DND toggle, media (MPRIS), master+per-app volume slider, brightness slider,
+  # the toggle/launch grid, then the notification list. backlight device is
+  # intel_backlight (the only /sys/class/backlight entry on this laptop).
+  xdg.configFile."swaync/config.json".text = builtins.toJSON {
+    "$schema" = "/etc/xdg/swaync/configSchema.json";
+    positionX = "right";
+    positionY = "top";
+    control-center-width = 400;
+    control-center-height = 740;
+    control-center-margin-top = 8;
+    control-center-margin-bottom = 8;
+    control-center-margin-right = 8;
+    notification-window-width = 400;
+    fit-to-screen = true;
+    keyboard-shortcuts = true;
+    image-visibility = "when-available";
+    transition-time = 200;
+    hide-on-clear = false;
+    hide-on-action = true;
+    widgets = [ "title" "mpris" "volume" "backlight" "buttons-grid" "notifications" ];
+    widget-config = {
+      title = { text = "Quick Settings"; clear-all-button = true; button-text = "Clear All"; };
+      mpris = { image-size = 88; image-radius = 12; };
+      volume = { label = "󰕾"; show-per-app = true; show-per-app-label = true; };
+      backlight = { label = "󰃟"; device = "intel_backlight"; };
+      # GNOME-style quick-settings tiles. TOP ROW = live ON/OFF toggles: state is
+      # refreshed each time the panel opens via update-command (which MUST echo
+      # `true`/`false`); on click the command sees the NEW desired state in
+      # $SWAYNC_TOGGLE_STATE and the tile gets the `.active` CSS class (accent
+      # fill — see style.css). BOTTOM ROW opens the full apps for the one thing
+      # swaync can't draw inline: the device/network LISTS (pick a Wi-Fi, pair a
+      # headset, choose an output — pwvucontrol IS the audio output picker).
+      # Backends: nmcli (NetworkManager), bluetoothctl (bluez), swaync-client (DND).
+      "buttons-grid" = {
+        buttons-per-row = 3;
+        actions = [
+          { label = "󰖩  Wi-Fi"; type = "toggle";
+            command = "sh -c '[ \"$SWAYNC_TOGGLE_STATE\" = true ] && nmcli radio wifi on || nmcli radio wifi off'";
+            update-command = "sh -c '[ \"$(nmcli radio wifi)\" = enabled ] && echo true || echo false'"; }
+          { label = "󰂯  Bluetooth"; type = "toggle";
+            command = "sh -c '[ \"$SWAYNC_TOGGLE_STATE\" = true ] && bluetoothctl power on || bluetoothctl power off'";
+            update-command = "sh -c 'bluetoothctl show | grep -q \"Powered: yes\" && echo true || echo false'"; }
+          { label = "󰂛  Do Not Disturb"; type = "toggle";
+            command = "swaync-client -d -sw";
+            update-command = "swaync-client -D"; }
+          { label = "󰖟  Network";  command = "nm-connection-editor"; }
+          { label = "󰓃  Sound";    command = "pwvucontrol"; }
+          { label = "󰂲  Devices";  command = "blueman-manager"; }
+        ];
+      };
+      notifications = { vexpand = true; };
+    };
+  };
+  # Catppuccin Mocha to match Waybar (bg #1e1e2e, text #cdd6f4, accent #585b70,
+  # blue #89b4fa). cssPriority stays default ("application") so this overrides
+  # the package's shipped theme.
+  xdg.configFile."swaync/style.css".text = ''
+    @define-color base   #1e1e2e;
+    @define-color mantle #181825;
+    @define-color surface #313244;
+    @define-color overlay #585b70;
+    @define-color text   #cdd6f4;
+    @define-color blue   #89b4fa;
+
+    * { font-family: "JetBrainsMono Nerd Font"; font-size: 13px; }
+
+    .notification-row .notification-background,
+    .notification-row .notification-background .notification {
+      background: @base; color: @text;
+      border: 1px solid @overlay; border-radius: 8px; margin: 4px 8px;
+    }
+    .notification-row .notification-background .notification .notification-content { padding: 6px; }
+    .close-button { background: transparent; color: @text; border-radius: 6px; }
+    .close-button:hover { background: @blue; color: @base; }
+
+    .control-center {
+      background: @mantle; color: @text;
+      border: 1px solid @overlay; border-radius: 12px; padding: 12px;
+    }
+    .control-center .widget-title { color: @text; font-size: 16px; margin: 4px 4px 8px 4px; }
+    .control-center .widget-title > button {
+      background: @surface; color: @text; border-radius: 8px; padding: 4px 10px;
+    }
+    .control-center .widget-title > button:hover { background: @blue; color: @base; }
+
+    /* Sliders (volume + brightness) */
+    .widget-volume, .widget-backlight {
+      background: @base; border-radius: 10px; padding: 8px; margin: 4px 0;
+    }
+    trough { background: @surface; border-radius: 8px; }
+    trough highlight, highlight { background: @blue; border-radius: 8px; }
+    slider { background: @text; border-radius: 50%; }
+
+    /* Toggle / launch grid */
+    .widget-buttons-grid { background: @base; border-radius: 10px; padding: 8px; margin: 4px 0; }
+    .widget-buttons-grid > flowbox > flowboxchild > button {
+      background: @surface; color: @text; border-radius: 8px; padding: 10px; margin: 4px;
+    }
+    .widget-buttons-grid > flowbox > flowboxchild > button:hover { background: @overlay; color: @text; }
+    /* Active toggle tile (Wi-Fi/BT/DND on) — accent fill, like a lit GNOME tile. */
+    .widget-buttons-grid > flowbox > flowboxchild > button.active { background: @blue; color: @base; }
+
+    .widget-mpris { background: @base; border-radius: 10px; padding: 6px; margin: 4px 0; }
+    .widget-dnd { color: @text; margin: 4px; }
+    .widget-dnd > switch { background: @surface; border-radius: 12px; }
+    .widget-dnd > switch:checked { background: @blue; }
+  '';
+  # tofi theme for the audio-output picker (audioSwitcher). Centered, Catppuccin.
+  xdg.configFile."tofi/config".text = ''
+    width = 420
+    height = 260
+    border-width = 2
+    outline-width = 0
+    corner-radius = 10
+    padding-top = 12
+    padding-bottom = 12
+    padding-left = 16
+    padding-right = 16
+    font = JetBrainsMono Nerd Font
+    background-color = #1e1e2e
+    border-color = #585b70
+    text-color = #cdd6f4
+    prompt-color = #89b4fa
+    selection-color = #89b4fa
+    result-spacing = 6
+    num-results = 6
   '';
 
   # Hyprland-session tooling. (ghostty/waybar/hyprlock come from their HM modules
   # above; wpctl ships with the system PipeWire/WirePlumber.)
   home.packages = with pkgs; [
-    wofi            # app launcher ($mod+D / $mod+R)
-    mako            # notifications (exec-once)
+    walker          # Spotlight-style launcher FRONTEND (ALT+Space / $mod+D). Runs
+                    # as a GApplication service from exec-once; the keybinds just
+                    # message the running service.
+    elephant        # walker's BACKEND daemon — supplies all providers (apps, calc,
+                    # files, clipboard, websearch…). walker 2.x is useless without
+                    # it; also started from exec-once (see the launcher block above).
+    swaynotificationcenter # notifications + quick-settings panel (exec-once; was mako)
+    pwvucontrol     # native PipeWire mixer — full Sound settings (volume on-click)
+    blueman         # Bluetooth manager + tray applet (blueman-applet, exec-once)
+    networkmanagerapplet # nm-applet (tray, exec-once) + nm-connection-editor (clicks)
+    tofi            # dmenu for the audio-output picker (audioSwitcher)
     awww            # wallpaper slideshow daemon (exec-once; was swww)
     hypridle        # idle -> lock/dpms (exec-once)
+    wl-gammarelay-rs # software gamma/brightness daemon for the idle dim (exec-once)
     grim slurp      # screenshots (Print)
     wl-clipboard    # wl-copy / wl-paste
     brightnessctl   # backlight keys
@@ -588,9 +892,11 @@ in
   # KEYBIND CHEAT-SHEET ($mod = Super/Windows key)
   # Apps & session
   #   $mod+Return ............ terminal (ghostty)
-  #   Alt+Space (or $mod+D) .. app launcher (wofi, Spotlight-style)
+  #   Alt+Space (or $mod+D) .. launcher (walker — apps, calc, files, clipboard, web)
   #   $mod+W ................. close focused window
   #   $mod+L ................. lock screen (hyprlock)
+  #   $mod+N ................. quick-settings / notification panel (swaync)
+  #   $mod+O ................. pick audio output device (tofi)
   #   $mod+M ................. EXIT Hyprland (back to the tuigreet login)
   # Window control
   #   $mod+V ................. toggle floating
@@ -609,6 +915,7 @@ in
   #   $mod+Shift+M ........... re-run monitor setup (4K modeset fix + clamshell)
   # Media / capture
   #   Print .................. region screenshot -> clipboard
-  #   Volume / Brightness .... wpctl / brightnessctl (hardware keys)
+  #   Volume / Brightness .... wpctl / brightnessctl (hardware keys; sliders in $mod+N)
+  #   Audio: click volume .... pwvucontrol (full Sound); right-click .. output picker
   # ──────────────────────────────────────────────────────────────────────────
 }

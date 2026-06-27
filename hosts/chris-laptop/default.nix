@@ -274,6 +274,10 @@
   # /var/lib/bluetooth, which is already a persist bind, so a paired controller
   # survives the impermanent-root wipe. (USB needs nothing — xpad is in-kernel.)
   hardware.xpadneo.enable = true;
+  # Blueman manager/applet (Hyprland quick-settings, see home/hyprland.nix). The
+  # system service supplies the polkit mechanism so pairing + rfkill work without
+  # root from the user-session applet.
+  services.blueman.enable = true;
 
   # Intel thermal management (Tiger Lake-H + RTX 3060 in a 15" chassis).
   services.thermald.enable = true;
