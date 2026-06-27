@@ -73,6 +73,11 @@ in
     enableZshIntegration = true;
     options = [ "--cmd cd" ];   # `cd` becomes zoxide (jump to frecent dirs)
   };
+  # zoxide's "doctor" warns when it isn't the LAST thing to register precmd/chpwd
+  # hooks — but starship/atuin/direnv all legitimately add theirs after it, so the
+  # check is a harmless false positive here. It otherwise prints on every shell
+  # start (including every non-interactive shell), so silence it.
+  home.sessionVariables._ZO_DOCTOR = "0";
   programs.fzf = {
     enable = true;
     enableZshIntegration = true;
