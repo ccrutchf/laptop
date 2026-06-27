@@ -497,7 +497,7 @@
     hashedPasswordFile = "/persist/passwd/chris";
     shell = pkgs.zsh;
     # dialout = serial/UART console access (junkyard UART work, /dev/ttyUSB*).
-    extraGroups = [ "wheel" "docker" "dialout" "input" ];
+    extraGroups = [ "wheel" "docker" "dialout" "input" "tty" "uucp" ];
   };
   # No direct root login; admin via sudo (chris in wheel).
   users.users.root.hashedPassword = "!";
@@ -619,6 +619,7 @@
     sops age ssh-to-age  # edit/inspect sops secrets; derive age key from the SSH key
     nvtopPackages.nvidia # GPU utilization monitor (training/inference)
     tio               # serial terminal for UART console work (junkyard etc.)
+    minicom           # minimal serial terminal
     alvr              # SteamVR->Quest streaming, fallback VR path (opens its own LAN ports at runtime)
   ]);
 
