@@ -7,7 +7,9 @@
 # `platform: osx` block), so there is intentionally NO `homebrew { }` block here.
 #
 # PREREQUISITES on a fresh machine (see REBUILD-MAC.md):
-#   1. Determinate Systems Nix installer (it owns the nix daemon — nix.enable=false).
+#   1. The official upstream multi-user Nix installer (org.nixos.nix-daemon). Unlike
+#      Determinate, it does NOT manage flakes/daemon config for us, so nix-darwin
+#      owns the Nix installation here (nix.enable = true, below).
 #   2. Homebrew installed (depend shells out to `brew`/`mas`; it does not build them).
 #   3. ~/.ssh/id_ed25519 restored from Nextcloud (git signing; shared sops identity).
 { config, lib, pkgs, inputs, ... }:
@@ -15,10 +17,16 @@
 {
   nixpkgs.config.allowUnfree = true;
 
-  # Determinate Systems owns the Nix installation and daemon, so nix-darwin must
-  # NOT manage it. Determinate enables flakes + nix-command by default, so the
-  # nix.settings normally set here are managed in /etc/nix/nix.custom.conf instead.
-  nix.enable = false;
+  # Nix was installed with the official upstream multi-user installer (not
+  # Determinate), so nix-darwin manages the Nix installation and daemon. Because
+  # the upstream installer's /etc/nix/nix.conf does NOT enable flakes, we must turn
+  # on the experimental features here or flake commands break after the switch.
+  #
+  # NOTE (first switch only): nix-darwin refuses to clobber a pre-existing,
+  # unmanaged /etc/nix/nix.conf. Move it aside once before the first switch:
+  #   sudo mv /etc/nix/nix.conf /etc/nix/nix.conf.before-nix-darwin
+  nix.enable = true;
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
   # nix-darwin state version. Integer (unlike NixOS's "25.11"); bump only when the
   # release notes say to. Safe to set on a fresh install — it only gates the

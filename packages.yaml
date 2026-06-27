@@ -135,8 +135,13 @@ linux-data-tools:
 mac-apps:
   platform: osx
   brew:
+    # The Mac App Store CLI that drives the `mas:` provider below. Declared here so
+    # `--prune` keeps it (a brew-installed-but-undeclared mas would be removed on the
+    # next switch). It must already be on PATH when depend starts for the mas provider
+    # to be available — install it once as a bootstrap step (`brew install mas`).
+    mas:
     # iOS / dev toolchain goes here as you re-approve it (cocoapods, fastlane,
-    # swiftlint, rbenv, …). Empty → prune leaves brew formulae untouched.
+    # swiftlint, rbenv, …).
   cask:
     # Zen browser (cask `zen`, not `zen-browser`).
     zen:
@@ -160,6 +165,7 @@ mac-apps:
     # Xcode is App Store only — not a Homebrew cask.
     "497799835":
       name: Xcode
+      dependencies: [mas]
 
 # e4e-data-management via pipx (CLI: `origin`). Same tool as the Linux block, the
 # macOS arm64 wheel from the same v0.6.1 release.
