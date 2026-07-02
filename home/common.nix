@@ -48,6 +48,20 @@ in
       ignoreSpace = true;
       share = true;
     };
+    # NixOS's /etc/zshrc runs `dircolors -b` (default DB) and aliases
+    # `ls --color`. That DB flags special directories with a *background*
+    # colour: st (sticky)=white-on-blue, ow (other-writable)=blue-on-green,
+    # tw (sticky+other-writable)=black-on-green. FUSE mounts (e.g. ~/mnt, the
+    # Synology share) report every dir as sticky, so a whole `ls` becomes
+    # unreadable coloured blocks. Keep the three classes distinct but express
+    # them as readable *foreground* colours instead of background blocks:
+    #   st -> normal dir blue (sticky is benign, and ubiquitous on the mount)
+    #   ow -> bold yellow     (world-writable — worth noticing)
+    #   tw -> bold red        (world-writable AND sticky — loudest warning)
+    # Runs from ~/.zshrc, i.e. after the system dircolors eval, so it wins.
+    initContent = ''
+      export LS_COLORS="''${LS_COLORS}:st=01;34:ow=01;33:tw=01;31"
+    '';
   };
 
   # atuin: full-screen fuzzy history on Ctrl-R. --disable-up-arrow keeps Up bound
