@@ -67,6 +67,15 @@
   # openconnect plugin: AnyConnect VPN type in GNOME Settings (UCSD vpn.ucsd.edu).
   networking.networkmanager.plugins = with pkgs; [ networkmanager-openconnect ];
 
+  # NetworkManager pulls in ModemManager, which probes any USB-serial adapter
+  # with AT commands the instant it appears — colliding with UART console
+  # sessions (tio/minicom) and producing dropped keystrokes + high-bit garbage.
+  # The exact adapter works fine under Windows/PuTTY and Ubuntu, which don't
+  # probe it. No cellular modem on this laptop, so disable MM outright. (For a
+  # surgical alternative, a udev rule tagging the adapter ENV{ID_MM_DEVICE_IGNORE}
+  # would stop MM touching just that port.)
+  systemd.services.ModemManager.enable = lib.mkForce false;
+
   time.timeZone = "America/Los_Angeles";
   # Dual-boot with Windows: Windows treats the RTC as local time, so match it here
   # instead of fighting it (otherwise the clock is off by the UTC offset after
@@ -619,7 +628,6 @@
     sops age ssh-to-age  # edit/inspect sops secrets; derive age key from the SSH key
     nvtopPackages.nvidia # GPU utilization monitor (training/inference)
     tio               # serial terminal for UART console work (junkyard etc.)
-    minicom           # minimal serial terminal
     alvr              # SteamVR->Quest streaming, fallback VR path (opens its own LAN ports at runtime)
   ]);
 
