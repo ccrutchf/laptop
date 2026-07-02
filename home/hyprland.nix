@@ -481,6 +481,14 @@ in
         "center on, match:class ^(com.saivert.pwvucontrol)$"
         "float on, match:class ^(.*blueman-manager.*)$"
         "center on, match:class ^(.*blueman-manager.*)$"
+
+        # UCSD AnyConnect (openconnect) auth dialog: NetworkManager pops
+        # nm-openconnect-auth-dialog to collect the DUO/password prompt — a
+        # transient dialog, not a tiling client. Wrapped like blueman above, so
+        # match loosely. NOTE: class matched by convention (nm-openconnect-auth-
+        # dialog binary); verify via `hyprctl clients` while the prompt is open.
+        "float on, match:class ^(.*nm-openconnect-auth-dialog.*)$"
+        "center on, match:class ^(.*nm-openconnect-auth-dialog.*)$"
       ];
 
       # --- Keybinds (see the cheat-sheet comment at the end of this file) ---
