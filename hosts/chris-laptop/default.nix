@@ -126,10 +126,45 @@
   services.greetd = let
     hypr = config.programs.hyprland.package;   # same Hyprland as the user session
     regreetExe = lib.getExe config.programs.regreet.package;
+    # Greeter startup steps. Two failure modes to defeat, both of which leave the
+    # login "not rendering on the main screen":
+    #   1. ReGreet is a normal window, so it maps onto whatever output Hyprland has
+    #      focused when it opens. `focusmonitor` alone RACES the monitor layout: when
+    #      it loses, the greeter lands on the Dell (or, lid-open, the laptop panel).
+    #      Fix: when the 4K desk is present, DISABLE every other output so ReGreet
+    #      has nowhere else to map.
+    #   2. The Samsung 4K's initial modeset can hang ("page-flip awaiting") and come
+    #      up BLACK — so even pinned to the 4K, the greeter is invisible. The user
+    #      session clears this with a disable→re-enable cycle after the modeset
+    #      settles (home/hyprland.nix monitorSetup); mirror it here.
+    # Undocked we fall through to the catch-all monitor rule (laptop panel). Same
+    # `hyprctl monitors | grep LU28R55` desk-detection the user session uses.
+    greeterSteps = pkgs.writeShellScript "greetd-hypr-steps" ''
+      hyprctl=${hypr}/bin/hyprctl
+      grep=${pkgs.gnugrep}/bin/grep
+
+      if "$hyprctl" monitors | "$grep" -q LU28R55; then
+        # Docked at the 4K desk — hard-pin the greeter to the Samsung.
+        "$hyprctl" keyword monitor eDP-1,disable
+        "$hyprctl" keyword monitor "desc:Dell Inc. DELL E2318HR 5JDGK74BAJFL,disable"
+        # Clear the hung-modeset black screen: let the initial modeset settle, then
+        # disable→re-enable the 4K (same fix as the user session's monitorSetup).
+        sleep 3
+        "$hyprctl" keyword monitor "desc:Samsung Electric Company LU28R55 HCJW902122,disable"
+        "$hyprctl" keyword monitor "desc:Samsung Electric Company LU28R55 HCJW902122,preferred,0x0,1.25"
+        "$hyprctl" dispatch focusmonitor "desc:Samsung Electric Company LU28R55 HCJW902122"
+      elif "$grep" -qil closed /proc/acpi/button/lid/*/state; then
+        # Undocked but lid closed: don't draw on a shut panel.
+        "$hyprctl" keyword monitor eDP-1,disable
+      fi
+
+      ${regreetExe}
+      "$hyprctl" dispatch exit   # hand control back to greetd to start the session
+    '';
     # Greeter compositor config. Mirrors the user session's per-monitor layout
     # (home-hyprland.nix) so ReGreet lands on the 4K at the right scale when
     # docked; falls through to the laptop panel when undocked. Kept minimal —
-    # no bar/wallpaper daemons, just place monitors and run ReGreet.
+    # no bar/wallpaper daemons, just place monitors and run the steps above.
     greeterConfig = pkgs.writeText "greetd-hyprland.conf" ''
       monitor = desc:Samsung Electric Company LU28R55 HCJW902122, preferred, 0x0, 1.25
       monitor = desc:Dell Inc. DELL E2318HR 5JDGK74BAJFL, preferred, 3072x0, 1
@@ -144,10 +179,7 @@
         disable_splash_rendering = true
       }
 
-      # Clamshell (don't draw the greeter on a closed internal panel), prefer the
-      # 4K when docked, run ReGreet, then exit Hyprland so greetd starts the
-      # selected session. Each step is a no-op if its monitor is absent (undocked).
-      exec-once = ${pkgs.bash}/bin/sh -c '${pkgs.gnugrep}/bin/grep -qil closed /proc/acpi/button/lid/*/state && ${hypr}/bin/hyprctl keyword monitor eDP-1,disable; ${hypr}/bin/hyprctl dispatch focusmonitor "desc:Samsung Electric Company LU28R55 HCJW902122"; ${regreetExe}; ${hypr}/bin/hyprctl dispatch exit'
+      exec-once = ${greeterSteps}
     '';
   in {
     enable = true;
