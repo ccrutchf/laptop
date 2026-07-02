@@ -26,7 +26,26 @@
   # unmanaged /etc/nix/nix.conf. Move it aside once before the first switch:
   #   sudo mv /etc/nix/nix.conf /etc/nix/nix.conf.before-nix-darwin
   nix.enable = true;
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    # Dedupe identical store paths via hardlinks (mirrors the laptop).
+    auto-optimise-store = true;
+  };
+
+  # Weekly garbage collection, keep the last 30 days — mirrors the laptop's nix.gc.
+  # nix-darwin schedules this as a launchd job, so `interval` is a calendar spec
+  # (StartCalendarInterval) rather than NixOS's `dates` string. Weekday 0 = Sunday.
+  nix.gc = {
+    automatic = true;
+    interval = { Weekday = 0; Hour = 3; Minute = 15; };
+    options = "--delete-older-than 30d";
+  };
+
+  # `comma`: run any nixpkgs binary on demand (`, <tool>`) + command-not-found
+  # suggestions, using the prebuilt nix-index database (the nix-index-database flake
+  # input, wired in as a darwinModule in flake.nix). Mirrors the laptop.
+  programs.nix-index.enable = true;
+  programs.nix-index-database.comma.enable = true;
 
   # nix-darwin state version. Integer (unlike NixOS's "25.11"); bump only when the
   # release notes say to. Safe to set on a fresh install — it only gates the

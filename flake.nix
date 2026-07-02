@@ -104,6 +104,10 @@
       modules = [
         ./hosts/chris-macbook/default.nix
 
+        # Prebuilt nix-index DB → `comma` / nix-locate work instantly (mirrors the
+        # NixOS host's nixosModules.nix-index import above).
+        inputs.nix-index-database.darwinModules.nix-index
+
         home-manager.darwinModules.home-manager
         {
           home-manager.useGlobalPkgs = true;

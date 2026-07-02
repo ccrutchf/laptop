@@ -160,6 +160,12 @@ mac-apps:
     microsoft-office:
     # Plex desktop app.
     plex:
+    # Screen recording / streaming (Linux uses the com.obsproject.Studio flatpak).
+    obs:
+    # RDP client — the Mac equivalent of Remmina (org.remmina.Remmina) on Linux.
+    microsoft-remote-desktop:
+    # JetBrains IDE manager (the laptop installs jetbrains-toolbox via Nix).
+    jetbrains-toolbox:
   mas:
     # Mac App Store apps, keyed by numeric id (find via `mas search <name>`).
     # Xcode is App Store only — not a Homebrew cask.
