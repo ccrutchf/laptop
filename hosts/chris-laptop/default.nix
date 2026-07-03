@@ -378,6 +378,27 @@
     (final: prev: {
       pipx = prev.pipx.overridePythonAttrs (old: { doCheck = false; });
 
+      # cantarell-fonts 0.311 — its variable-font build autohints Cantarell-VF.otf
+      # with afdko 5.0.1's otfautohint, which regressed and now exits 1 (an empty
+      # "ERROR:") on the Cyrillic Ef even though the recipe already --exclude-glyphs
+      # uni0424. That fails the WHOLE system build: cantarell is a default fontconfig
+      # font (→ X11-fonts → fontconfig-cache → system-path). nixos-unstable's head
+      # (b5aa0fb) is itself broken and no earlier rev past the afdko-5.0.1 bump is
+      # good, so there's nothing to pin/revert to — and `depend update` re-pulls the
+      # broken head every time. make-variable-font.py runs otfautohint IN-PLACE on an
+      # already-saved+cleaned VF and the next step (subroutinize) re-reads that same
+      # file, so skipping the autohint yields a valid, un-hinted VF — imperceptible on
+      # this HiDPI/Wayland setup, and only the VF is touched (static instances build
+      # normally). Short-circuit the sole check_call so otfautohint never runs;
+      # --replace-fail trips the build loudly if upstream restructures the script.
+      # Drop once afdko's otfautohint is fixed upstream (then cantarell builds clean).
+      cantarell-fonts = prev.cantarell-fonts.overrideAttrs (old: {
+        postPatch = (old.postPatch or "") + ''
+          substituteInPlace scripts/make-variable-font.py \
+            --replace-fail "subprocess.check_call(" "0 and subprocess.check_call("
+        '';
+      });
+
       # envfs 1.2.0 — nixpkgs still ships 1.1.0, whose single-threaded FUSE daemon
       # DEADLOCKS whenever a caller's PATH contains /bin or /usr/bin: it re-enters its
       # own mount and every exec through /bin·/usr/bin then hangs in D-state
