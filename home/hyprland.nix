@@ -109,10 +109,13 @@ let
     get() { busctl --user get-property rs.wl-gammarelay / rs.wl.gammarelay Brightness 2>/dev/null | awk '{print $2}'; }
     setb() { busctl --user set-property rs.wl-gammarelay / rs.wl.gammarelay Brightness d "$1"; }
     cur=$(get); [ -z "$cur" ] && cur=1.0       # default if the daemon's not up yet
-    printf '%s\n' "$cur" > "$saved"            # remember it for on-resume
     pct=$(awk -v c="$cur" 'BEGIN { printf "%d", c * 100 }')
     target=30
+    # Already at/below the dim target — a re-fire before on-resume ran. Bail
+    # WITHOUT touching $saved: overwriting it with the dimmed value would make
+    # on-resume "restore" 30% and leave the screen stuck dim.
     [ "$pct" -le "$target" ] && exit 0
+    printf '%s\n' "$cur" > "$saved"            # remember it for on-resume
     while [ "$pct" -gt "$target" ]; do         # fade over ~0.8s
       pct=$(( pct - 5 ))
       [ "$pct" -lt "$target" ] && pct=$target
