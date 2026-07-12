@@ -334,8 +334,13 @@
   # never attempts the broken runtime-suspend. (System suspend/hibernate WHILE
   # docked is a separate path — the logind lid matrix in hibernation.nix already
   # avoids sleeping when docked.)
+  #
+  # Second rule: give the logged-in user access to Qualcomm boards in EDL/9008
+  # mode (05c6:9008) so `qdl` can flash them without root. Rubik Pi 3 enumerates
+  # here once switched into Emergency Download mode.
   services.udev.extraRules = ''
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x9a21", ATTR{power/control}="on"
+    SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9008", MODE="0660", TAG+="uaccess"
   '';
 
   # Firmware updates via LVFS (SSD/Thunderbolt/peripherals; MSI BIOS coverage is thin).
@@ -674,6 +679,7 @@
     cudatoolkit       # nvcc + CUDA libraries on PATH
     pciutils          # lspci
     android-tools     # adb + fastboot
+    qdl               # flash Qualcomm boards (Rubik Pi 3) over EDL/9008
     dnsutils          # nslookup, dig, host
     vulkan-tools      # vulkaninfo (VR GPU/encode diagnostics)
     # rebuild/secrets tooling
