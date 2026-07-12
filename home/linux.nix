@@ -70,7 +70,23 @@ in
       "x-scheme-handler/unknown" = "app.zen_browser.zen.desktop";
       "application/pdf" = "org.gnome.Papers.desktop";
       "inode/directory" = "org.kde.dolphin.desktop";  # open folders in Dolphin
-    };
+    } // (
+      # VLC (the org.videolan.VLC flatpak) as default video player, over the common
+      # container MIME types. It also registers many audio types, but leave those to
+      # a dedicated audio app.
+      lib.genAttrs [
+        "video/mp4"
+        "video/x-matroska"     # .mkv
+        "video/quicktime"      # .mov
+        "video/webm"
+        "video/x-msvideo"      # .avi
+        "video/mpeg"
+        "video/x-flv"
+        "video/3gpp"
+        "video/x-ms-wmv"       # .wmv
+        "video/ogg"
+      ] (_: "org.videolan.VLC.desktop")
+    );
   };
 
   # synologyfuse-gui (configuration.nix systemPackages) ships no .desktop file, so

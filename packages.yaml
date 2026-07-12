@@ -116,6 +116,8 @@ linux-flatpaks:
     # Plex media client (the Mac gets the `plex` cask)
     tv.plex.PlexDesktop:
       source: flathub
+    org.videolan.VLC:
+      source: flathub
 
 # e4e-data-management via pipx (CLI: `origin`). Linux x86_64 wheel from the v0.6.1
 # release; not on PyPI. pipx comes from Nix on the activation PATH.
@@ -166,6 +168,8 @@ mac-apps:
     microsoft-remote-desktop:
     # JetBrains IDE manager (the laptop installs jetbrains-toolbox via Nix).
     jetbrains-toolbox:
+    # Media player (Linux uses the org.videolan.VLC flatpak).
+    vlc:
   mas:
     # Mac App Store apps, keyed by numeric id (find via `mas search <name>`).
     # Xcode is App Store only — not a Homebrew cask.
