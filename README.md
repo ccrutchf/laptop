@@ -22,10 +22,9 @@ Personal machines; not part of the KastnerRG/krg-infra fleet.
 | `flake.nix` | Entry point: `nixosConfigurations.chris-laptop` + `darwinConfigurations.chris-macbook` + inputs. |
 | `hosts/chris-laptop/` | NixOS host module (`default.nix`), `disko-config.nix`, `hardware-configuration.nix`. |
 | `hosts/chris-macbook/` | nix-darwin host module (`default.nix`). |
-| `modules/nixos/` | NixOS feature modules: `impermanence`, `hibernation`, `secure-boot`, `backups`, `hyprland`. |
+| `modules/nixos/` | NixOS feature modules: `impermanence`, `hibernation`, `secure-boot`, `backups`. |
 | `home/common.nix` | Cross-platform home-manager (shell stack, git, core CLIs) — both hosts. |
-| `home/linux.nix` / `home/darwin.nix` | Per-host home (imports `common.nix`); each runs `depend` on switch. |
-| `home/hyprland.nix` | Hyprland session config (imported by `home/linux.nix`). |
+| `home/linux.nix` / `home/darwin.nix` | Per-host home (imports `common.nix`); each runs `depend` on switch. Linux half configures the GNOME desktop (dconf, extensions, GTK, darkman). |
 | `packages.yaml` | Non-Nix packages, per-platform blocks, reconciled by `depend`. |
 | `.sops.yaml`, `secrets/` | sops-nix encrypted secrets (age via the Nextcloud-synced SSH key). |
 | `REBUILD.md` | Index → `REBUILD-NIXOS.md` (NixOS) and `REBUILD-MAC.md` (macOS) reinstall runbooks. |

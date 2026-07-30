@@ -28,12 +28,11 @@ hosts/
   chris-laptop/disko-config.nix   declarative disk (btrfs-on-LUKS, the 2TB drive ONLY)
   chris-laptop/hardware-configuration.nix   kernel modules / microcode only (disko owns disk entries)
   chris-macbook/default.nix       nix-darwin host module
-modules/nixos/                    NixOS feature modules: impermanence, hibernation, secure-boot, backups, hyprland
+modules/nixos/                    NixOS feature modules: impermanence, hibernation, secure-boot, backups
 home/
   common.nix                      cross-platform home-manager (shell stack, git, core CLIs, claude-backup) — BOTH hosts
-  linux.nix                       Linux/desktop home (GNOME/Hyprland/flatpak/dconf/GTK/darkman) + Linux depend hook
+  linux.nix                       Linux/desktop home (GNOME/flatpak/dconf/GTK/darkman) + Linux depend hook
   darwin.nix                      macOS home + the macOS depend hook
-  hyprland.nix                    Hyprland session config (imported by home/linux.nix)
   claude-backup.nix               hourly ~/.claude snapshot to Nextcloud (systemd timer / launchd agent)
 packages.yaml                     non-Nix packages, per-platform blocks, reconciled by depend
 ```
@@ -77,11 +76,12 @@ A top-level map of named blocks. Each has filter keys (`platform`, `architecture
 - `hibernation.nix` — lid matrix (docked→`ignore`, AC/battery→suspend-then-hibernate); resume from the NoCoW `/swap/swapfile` (`resume_offset` is install-specific — re-derive on reinstall).
 - `secure-boot.nix` — lanzaboote. **Two-phase**: `my.secureBoot.enable = false` for the first install, then `sbctl create-keys` → enable → `sbctl enroll-keys --microsoft` → re-enroll TPM2 bound to the measured PCRs.
 - `backups.nix` — restic → Nextcloud over rclone WebDAV (`~/Repos`). **Gated** on the sops secrets (`my.backups.enable`).
-- `hyprland.nix` — the system half of the Hyprland session (greeter is greetd + ReGreet inside a Hyprland instance; see the greetd block in the host module).
+
+The desktop is **GNOME on Wayland** via **GDM** (`services.desktopManager.gnome` + `services.displayManager.gdm` in the host module). GNOME owns power management (low-battery warnings + auto-suspend), lid handling, gnome-keyring (Secret Service), and accessibility (Large Text + fractional scaling in Settings). Desktop tweaks are home-manager: `home/linux.nix` sets dconf (extensions, dash-to-dock, fractional scaling, fonts), GTK, and **darkman** for sunrise/sunset light↔dark. *(The repo previously ran a Hyprland-only session with a greetd/ReGreet greeter; that was removed in favor of GNOME — see git history if resurrecting any of it.)*
 
 Secrets are **sops-nix** (`.sops.yaml`, `secrets/`); the age identity is derived (`ssh-to-age`) from the SSH key synced via Nextcloud, so every personal machine decrypts and a reinstall doesn't lose it. **Disk:** `hosts/chris-laptop/disko-config.nix` is btrfs-on-LUKS, **the 2TB drive ONLY** — Windows lives on a separate, never-referenced NVMe.
 
-**Hardware notes** (in `hosts/chris-laptop/default.nix`): NVIDIA RTX 3060 + Intel iGPU using PRIME render-offload; LUKS root with TPM2 auto-unlock (passphrase fallback); Hyprland on Wayland (GNOME removed); PipeWire with HDA power-saving disabled to avoid clipped playback onsets.
+**Hardware notes** (in `hosts/chris-laptop/default.nix`): NVIDIA RTX 3060 + Intel iGPU using PRIME render-offload; LUKS root with TPM2 auto-unlock (passphrase fallback); GNOME on Wayland (GDM greeter); PipeWire with HDA power-saving disabled to avoid clipped playback onsets.
 
 ## CI
 

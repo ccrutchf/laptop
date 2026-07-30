@@ -11,7 +11,6 @@
       ../../modules/nixos/hibernation.nix
       ../../modules/nixos/secure-boot.nix
       ../../modules/nixos/backups.nix
-      ../../modules/nixos/hyprland.nix
     ];
 
   # --- local feature toggles (see each module) ---
@@ -20,7 +19,6 @@
   my.hibernation.resumeOffset = 533760;  # /swap/swapfile offset (btrfs inspect-internal map-swapfile); re-derive on reinstall
   my.secureBoot.enable   = false;  # PHASE 2: flip true AFTER `sbctl create-keys` (see module)
   my.backups.enable      = false;  # flip true AFTER the age key + secrets/secrets.yaml exist
-  my.hyprland.enable     = true;   # Hyprland session selectable at GDM (GNOME stays the default)
 
   # Boot loader. systemd-boot by default; modules/secure-boot.nix replaces it with
   # lanzaboote (signed) once my.secureBoot.enable = true.
@@ -85,179 +83,19 @@
   # Was commented out (defaulting to the C locale). Set it explicitly.
   i18n.defaultLocale = "en_US.UTF-8";
 
-  # X infrastructure kept for the NVIDIA driver config (videoDrivers below) and
-  # XWayland. No X *session* is used — the desktop is Hyprland on Wayland.
+  # X infrastructure: kept for the NVIDIA driver config (videoDrivers below) and
+  # XWayland. GNOME runs its Wayland session by default; GDM's own greeter is
+  # Wayland too. X stays enabled so a fallback Xorg GNOME session is available and
+  # the NVIDIA/xserver options apply.
   services.xserver.enable = true;
 
-  # GNOME + GDM removed for now (going Hyprland-only). GDM's Wayland greeter on
-  # NVIDIA left a stuck cursor that Hyprland couldn't clear, and GNOME 50 no
-  # longer allows an X11 greeter — so we drop GDM entirely. Re-enable these two
-  # lines to bring GNOME back.
-  # services.displayManager.gdm.enable = true;
-  # services.desktopManager.gnome.enable = true;
-
-  # File manager: Dolphin (KDE). Replaces Thunar — Thunar's archive plugin is only
-  # a frontend and we never installed a backend, so Compress/Extract failed with
-  # "No suitable archive manager found"; Dolphin bundles that via Ark. The D-Bus
-  # plumbing Dolphin leans on:
-  #   - gvfs    -> trash + network shares (GTK apps share it too)
-  #   - udisks2 -> Solid device notifier: auto-mount removable drives
-  # Dolphin/Ark/thumbnailers are user packages (home/linux.nix); Qt/Breeze theming
-  # is wired through the home-manager `qt` module there.
-  services.gvfs.enable = true;
-  services.udisks2.enable = true;
-
-  # Login greeter: greetd + ReGreet, run INSIDE a dedicated Hyprland instance.
-  #
-  # History: the earlier graphical attempts failed for compositor-specific
-  # reasons — GDM left a stuck cursor handed off to Hyprland (NVIDIA), and
-  # ReGreet-in-cage hit cage's multi-monitor limits (greeter on the wrong screen,
-  # cut off). We fell back to tuigreet (no compositor, so neither bug applies).
-  # This setup keeps the graphical greeter but uses HYPRLAND as ReGreet's host
-  # compositor instead of cage: monitor placement/scaling is controlled by the
-  # same `monitor =` config the user session uses (fixing the cut-off/wrong-screen
-  # problem), and the stuck-cursor bug was GDM-specific — it can't occur when the
-  # greeter compositor IS Hyprland (Hyprland renders on the Intel iGPU).
-  #
-  # The greeter Hyprland runs `regreet` and exits (`hyprctl dispatch exit`) when
-  # ReGreet hands control to greetd; greetd then starts the chosen session
-  # (start-hyprland, from the wayland-sessions entry registered below). ReGreet
-  # itself (theme/background/sessions) is configured via programs.regreet.
-  services.greetd = let
-    hypr = config.programs.hyprland.package;   # same Hyprland as the user session
-    regreetExe = lib.getExe config.programs.regreet.package;
-    # Greeter startup steps. Two failure modes to defeat, both of which leave the
-    # login "not rendering on the main screen":
-    #   1. ReGreet is a normal window, so it maps onto whatever output Hyprland has
-    #      focused when it opens. `focusmonitor` alone RACES the monitor layout: when
-    #      it loses, the greeter lands on the Dell (or, lid-open, the laptop panel).
-    #      Fix: when the 4K desk is present, DISABLE every other output so ReGreet
-    #      has nowhere else to map.
-    #   2. The Samsung 4K's initial modeset can hang ("page-flip awaiting") and come
-    #      up BLACK — so even pinned to the 4K, the greeter is invisible. The user
-    #      session clears this with a disable→re-enable cycle after the modeset
-    #      settles (home/hyprland.nix monitorSetup); mirror it here.
-    # Undocked we fall through to the catch-all monitor rule (laptop panel). Same
-    # `hyprctl monitors | grep LU28R55` desk-detection the user session uses.
-    greeterSteps = pkgs.writeShellScript "greetd-hypr-steps" ''
-      hyprctl=${hypr}/bin/hyprctl
-      grep=${pkgs.gnugrep}/bin/grep
-
-      if "$hyprctl" monitors | "$grep" -q LU28R55; then
-        # Docked at the 4K desk — hard-pin the greeter to the Samsung.
-        "$hyprctl" keyword monitor eDP-1,disable
-        "$hyprctl" keyword monitor "desc:Dell Inc. DELL E2318HR 5JDGK74BAJFL,disable"
-        # Clear the hung-modeset black screen: let the initial modeset settle, then
-        # disable→re-enable the 4K (same fix as the user session's monitorSetup).
-        sleep 3
-        "$hyprctl" keyword monitor "desc:Samsung Electric Company LU28R55 HCJW902122,disable"
-        "$hyprctl" keyword monitor "desc:Samsung Electric Company LU28R55 HCJW902122,preferred,0x0,1.25"
-        "$hyprctl" dispatch focusmonitor "desc:Samsung Electric Company LU28R55 HCJW902122"
-      elif "$grep" -qil closed /proc/acpi/button/lid/*/state; then
-        # Undocked but lid closed: don't draw on a shut panel.
-        "$hyprctl" keyword monitor eDP-1,disable
-      fi
-
-      ${regreetExe}
-      "$hyprctl" dispatch exit   # hand control back to greetd to start the session
-    '';
-    # Greeter compositor config. Mirrors the user session's per-monitor layout
-    # (home-hyprland.nix) so ReGreet lands on the 4K at the right scale when
-    # docked; falls through to the laptop panel when undocked. Kept minimal —
-    # no bar/wallpaper daemons, just place monitors and run the steps above.
-    greeterConfig = pkgs.writeText "greetd-hyprland.conf" ''
-      monitor = desc:Samsung Electric Company LU28R55 HCJW902122, preferred, 0x0, 1.25
-      monitor = desc:Dell Inc. DELL E2318HR 5JDGK74BAJFL, preferred, 3072x0, 1
-      monitor = eDP-1, preferred, auto, 1.5
-      monitor = , preferred, auto, 1
-
-      input { numlock_by_default = true }
-      cursor { no_hardware_cursors = true }
-      animations { enabled = false }
-      misc {
-        disable_hyprland_logo = true
-        disable_splash_rendering = true
-      }
-
-      exec-once = ${greeterSteps}
-    '';
-  in {
-    enable = true;
-    # Launch via the `start-hyprland` watchdog wrapper, NOT the raw `Hyprland`
-    # binary — Hyprland 0.55 refuses to start when invoked directly. Args after
-    # `--` are forwarded to Hyprland (`--config FILE`).
-    settings.default_session = {
-      command = "${pkgs.dbus}/bin/dbus-run-session ${hypr}/bin/start-hyprland -- --config ${greeterConfig}";
-      user = "greeter";
-    };
-  };
-
-  # Graphical greeter (ReGreet). The greetd command above launches it inside
-  # Hyprland (overriding the module's default cage command). theme/font default
-  # to Adwaita/Cantarell.
-  #
-  # NO `background` ON PURPOSE — it crash-loops the greeter on this setup. ReGreet
-  # 0.3 loaded the wallpaper directly via gdk-pixbuf; 0.4 (pulled in by a
-  # `nix flake update` nixpkgs bump) rewrote background loading to try `glycin`
-  # first, then fall back to `gtk::MediaFile` (GStreamer) for anything glycin
-  # can't decode. The greeter's closure ships neither working glycin loaders nor
-  # a GStreamer plugin path (no GST_PLUGIN_SYSTEM_PATH_1_0, no gst-plugins-good),
-  # so glycin fails, the GStreamer fallback aborts inside gst_play_constructed
-  # (SIGABRT), regreet never creates a session, and greetd respawns it forever —
-  # the "dbus error / login screen crashes / retries" loop. Omitting `background`
-  # skips that whole code path; the greeter shows the dark Adwaita theme instead.
-  # (To bring the wallpaper back, the greeter needs glycin-loaders wired into its
-  # environment — a separate, testable change.)
-  programs.regreet = {
-    enable = true;
-    settings = {
-      GTK.application_prefer_dark_theme = true;
-    };
-  };
-
-  # ReGreet lists sessions from the wayland-sessions desktop files registered via
-  # services.displayManager.sessionPackages. The programs.hyprland module already
-  # registers the full `pkgs.hyprland` (line `sessionPackages = [ cfg.package ]`),
-  # but that package bundles TWO session files — `hyprland.desktop`
-  # (Exec=start-hyprland) and `hyprland-uwsm.desktop` (the UWSM wrapper, which we
-  # don't configure). Trim the list down to just the plain session so the UWSM
-  # entry never shows. mkForce replaces the module's default list (plain list-merge
-  # would keep the uwsm entry around).
-  services.displayManager.sessionPackages = lib.mkForce [
-    (pkgs.runCommand "hyprland-session-plain" {
-      passthru.providedSessions = [ "hyprland" ];
-    } ''
-      install -Dm644 \
-        ${config.programs.hyprland.package}/share/wayland-sessions/hyprland.desktop \
-        $out/share/wayland-sessions/hyprland.desktop
-    '')
-  ];
-
-  # Make Hyprland the session ReGreet lands on. ReGreet has NO "default session"
-  # setting — it preselects the session it cached as the initial user's last-used
-  # one, in /var/lib/regreet/state.toml, keyed by the desktop-file Name= field
-  # ("Hyprland"). With no cache it leaves the session box unselected, and
-  # submitting an empty session drops greetd to the user's shell — the "text
-  # prompt" instead of Hyprland. /var/lib/regreet is NOT in the impermanence
-  # persist list, so it's wiped every boot and a manual pick never sticks.
-  #
-  # So re-seed the cache each boot (systemd-tmpfiles runs well before greetd) with
-  # chris + Hyprland. Then the greeter comes up with the username and Hyprland
-  # already chosen, and a bare Enter (after the password) launches Hyprland. The
-  # `C` rule copies only when the target is absent — which, on this wiped root, is
-  # every boot; regreet is free to rewrite it within a session (greeter owns the
-  # dir), and the next boot reseeds. The session string MUST equal the desktop
-  # Name= ("Hyprland"), not the file stem ("hyprland").
-  systemd.tmpfiles.rules = let
-    regreetState = pkgs.writeText "regreet-state.toml" ''
-      last_user = "chris"
-
-      [user_to_last_sess]
-      chris = "Hyprland"
-    '';
-  in [
-    "C /var/lib/regreet/state.toml 0644 greeter greeter - ${regreetState}"
-  ];
+  # GNOME (Wayland) + GDM. GNOME provides the shell, Settings, Files (Nautilus),
+  # gnome-keyring (Secret Service for Slack/VSCode), power management (low-battery
+  # warnings + auto-suspend), lid handling, and accessibility (Large Text +
+  # fractional scaling in Settings). Desktop tweaks live in home/linux.nix (dconf,
+  # extensions, darkman light/dark).
+  services.displayManager.gdm.enable = true;
+  services.desktopManager.gnome.enable = true;
 
   services.flatpak.enable = true;
 
@@ -315,10 +153,8 @@
   # /var/lib/bluetooth, which is already a persist bind, so a paired controller
   # survives the impermanent-root wipe. (USB needs nothing — xpad is in-kernel.)
   hardware.xpadneo.enable = true;
-  # Blueman manager/applet (Hyprland quick-settings, see home/hyprland.nix). The
-  # system service supplies the polkit mechanism so pairing + rfkill work without
-  # root from the user-session applet.
-  services.blueman.enable = true;
+  # Bluetooth pairing UI is GNOME's Settings → Bluetooth panel (gnome-bluetooth);
+  # no separate applet/polkit service needed.
 
   # Intel thermal management (Tiger Lake-H + RTX 3060 in a 15" chassis).
   services.thermald.enable = true;
@@ -509,15 +345,16 @@
   };
 
   fonts = {
-    # JetBrainsMono Nerd Font + font-awesome are added by modules/hyprland.nix
-    # (fonts.packages merges across modules). ubuntu-classic ships the Ubuntu /
-    # Ubuntu Mono families; Noto gives broad Unicode + a real serif; liberation
-    # covers the Arial/Times/Courier metric-compatible aliases documents expect.
+    # ubuntu-classic ships the Ubuntu / Ubuntu Mono families; Noto gives broad
+    # Unicode + a real serif; liberation covers the Arial/Times/Courier metric-
+    # compatible aliases documents expect; JetBrainsMono Nerd Font is the mono
+    # default below (terminal/VSCode) and carries glyphs.
     packages = with pkgs; [
       ubuntu-classic
       noto-fonts
       noto-fonts-color-emoji
       liberation_ttf
+      nerd-fonts.jetbrains-mono
     ];
 
     fontconfig = {
@@ -531,9 +368,10 @@
         monospace = [ "JetBrainsMono Nerd Font" "Ubuntu Mono" ];
         emoji     = [ "Noto Color Emoji" ];
       };
-      # Fractional Wayland scaling (1.25 / 1.5, see home-hyprland.nix) rasterizes
-      # then downscales, so LCD subpixel order no longer aligns with the panel —
-      # keep grayscale AA + slight hinting, NOT rgb subpixel (which fringes here).
+      # GNOME fractional scaling (org/gnome/mutter experimental-features in
+      # home/linux.nix) rasterizes then downscales, so LCD subpixel order no
+      # longer aligns with the panel — keep grayscale AA + slight hinting, NOT
+      # rgb subpixel (which fringes here).
       antialias = true;
       hinting = { enable = true; style = "slight"; };
       subpixel.rgba = "none";
