@@ -27,8 +27,7 @@ in
   # Linux/desktop packages (the portable CLIs gh/claude-code/uv/depend are in
   # home-common.nix). pipx is Linux-only here (the data-tools block in packages.yaml).
   home.packages = with pkgs; [
-    yaru-theme            # still used for the cursor theme below
-    adwaita-icon-theme    # GNOME-default icons (reverted from Yaru)
+    adwaita-icon-theme    # GNOME-default icons + the Adwaita cursor theme below
     gnome-themes-extra    # ships the Adwaita-dark GTK3 variant darkman switches to
     gnomeExtensions.dash-to-dock
     gnomeExtensions.appindicator
@@ -100,10 +99,13 @@ in
   '';
 
   # Unified cursor: sets theme + size everywhere at once (GTK + XCURSOR_* for
-  # Wayland and X11/XWayland).
+  # Wayland and X11/XWayland). Adwaita, not Yaru: nixpkgs dropped yaru-theme (it
+  # needed gtk-engine-murrine, removed as unmaintained GTK 2), and the GNOME
+  # default cursor ships in adwaita-icon-theme, which is already the icon theme.
   home.pointerCursor = {
-    name = "Yaru";
-    package = pkgs.yaru-theme;
+    enable = true;  # explicit: HM deprecated inferring this from the block existing
+    name = "Adwaita";
+    package = pkgs.adwaita-icon-theme;
     size = 24;
     gtk.enable = true;
     x11.enable = true;
