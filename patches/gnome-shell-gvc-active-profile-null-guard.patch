@@ -1,0 +1,55 @@
+Guard against a NULL pa_card_info::active_profile in libgvc's update_card().
+
+PulseAudio leaves pa_card_info::active_profile NULL when a card has no usable
+profile. pipewire-pulse surfaces this as
+
+  mod.protocol-pulse: card 54 port N profiles inconsistent (0 < 3)
+
+which happens on this machine every time a Thunderbolt dock's audio devices are
+enumerated or torn down. update_card() then dereferences info->active_profile
+unconditionally and gnome-shell segfaults:
+
+  .gnome-shell-wr[3192]: segfault at 0 ip ... in libgvc.so
+  #0  _pa_context_get_card_info_by_index_cb  (libgvc.so)   [update_card inlined]
+  #1  context_get_card_info_callback         (libpulse.so.0)
+  #2  run_action                             (libpulsecommon)
+
+The faulting instruction confirms the field:
+
+  49 8b 42 30   mov rax,[r10+0x30]   ; info->active_profile  (== NULL)
+  48 8b 30      mov rsi,[rax]        ; active_profile->name  -> SIGSEGV
+
+0x30 is the offset of active_profile in pa_card_info, and name is the first
+member of pa_card_profile_info.
+
+Both dereferences are guarded. The second skips the call rather than passing NULL
+through, because gvc_mixer_card_set_profile() would then crash in g_str_equal().
+
+Applies to gnome-shell's vendored subprojects/gvc; the same code is present in
+libgnome-volume-control master.
+--- a/subprojects/gvc/gvc-mixer-control.c
++++ b/subprojects/gvc/gvc-mixer-control.c
+@@ -2608,7 +2608,8 @@
+                 struct pa_card_profile_info pi = info->profiles[i];
+                 gboolean is_default;
+ 
+-                is_default = (g_strcmp0 (pi.name, info->active_profile->name) == 0);
++                is_default = info->active_profile != NULL &&
++                             (g_strcmp0 (pi.name, info->active_profile->name) == 0);
+                 g_debug ("\tProfile '%s': %d sources %d sinks%s",
+                          pi.name, pi.n_sources, pi.n_sinks,
+                          is_default ? " (Current)" : "");
+@@ -2646,7 +2647,12 @@
+         gvc_mixer_card_set_profiles (card, profile_list);
+         gvc_mixer_card_set_name (card, pa_proplist_gets (info->proplist, "device.description"));
+         gvc_mixer_card_set_icon_name (card, pa_proplist_gets (info->proplist, "device.icon_name"));
+-        gvc_mixer_card_set_profile (card, info->active_profile->name);
++        /* PulseAudio leaves active_profile NULL for a card with no usable profile
++         * (pipewire-pulse reports this as "profiles inconsistent"), e.g. while a
++         * USB/dock audio device is being torn down or enumerated. Passing NULL on
++         * would crash in gvc_mixer_card_set_profile()'s g_str_equal() anyway. */
++        if (info->active_profile != NULL)
++                gvc_mixer_card_set_profile (card, info->active_profile->name);
+ 
+         if (is_new) {
+                 g_hash_table_insert (control->priv->cards,

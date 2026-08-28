@@ -264,6 +264,35 @@
         };
       });
 
+      # gnome-shell's vendored libgvc — SEGFAULTS when a dock's audio card is
+      # enumerated/torn down. PulseAudio leaves pa_card_info::active_profile NULL for a
+      # card with no usable profile (pipewire-pulse logs "card N port M profiles
+      # inconsistent"), and update_card() dereferences it unconditionally:
+      #   segfault at 0 ... in libgvc.so, #0 _pa_context_get_card_info_by_index_cb
+      # Same failure mode as the mutter patch below (unguarded NULL on device teardown),
+      # different subsystem — this one fires on REdock, the mutter one on undock. Guards
+      # both derefs; the second skips the call rather than passing NULL into
+      # gvc_mixer_card_set_profile(), which would crash in g_str_equal(). Present in
+      # libgnome-volume-control master too, so not a "wait for the next bump" fix.
+      gnome-shell = prev.gnome-shell.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [ ../../patches/gnome-shell-gvc-active-profile-null-guard.patch ];
+      });
+
+      # mutter 50.2 — SEGFAULTS on every undock of the Thunderbolt dock. On a monitor
+      # change mutter clears workspace->logical_monitor_data, then rebuilds it in
+      # meta_workspace_ensure_work_areas_validated() by iterating only the monitors that
+      # STILL EXIST. A queued move_resize for a window on the just-removed monitor then
+      # reaches meta_workspace_get_onmonitor_region(), whose cache lookup returns NULL and
+      # is dereferenced unguarded -> SIGSEGV in meta_window_constrain. Its sibling
+      # meta_workspace_get_work_area_for_monitor() already has exactly this NULL check;
+      # the patch makes the two consistent. Not extension-related: reproduced with
+      # dash-to-dock disabled (upstream GNOME/mutter#3402, #1979, #4369 agree). Still
+      # unfixed on mutter main as of 2026-08-11 with no MR in flight, so this is not a
+      # "wait for the next bump" workaround — drop it only once upstream lands a guard.
+      mutter = prev.mutter.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [ ../../patches/mutter-onmonitor-region-null-guard.patch ];
+      });
+
       # wivrn 26.6 — nixpkgs still ships 26.2.3, but the Quest headset's WiVRn
       # client auto-updated to 26.6 and the server/client protocol must match or
       # the streamer refuses the session. This is nixpkgs PR #531078 (a one-file

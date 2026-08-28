@@ -1,0 +1,42 @@
+Guard against a NULL per-monitor cache entry in meta_workspace_get_onmonitor_region().
+
+meta_workspace_ensure_work_areas_validated() repopulates workspace->logical_monitor_data
+by iterating meta_monitor_manager_get_logical_monitors() -- i.e. only monitors that
+CURRENTLY exist. A window still referencing a just-removed monitor therefore gets no
+hash-table entry, meta_workspace_get_logical_monitor_data() returns NULL, and the
+unguarded `data->logical_monitor_region` segfaults.
+
+Reproduced 100% of the time on this machine by undocking a Thunderbolt 4 dock driving
+two external displays:
+
+  thunderbolt 0-3: device disconnected
+  meta_monitor_manager_get_logical_monitor_from_number: assertion
+    '(unsigned int) number < g_list_length (manager->logical_monitors)' failed
+  meta_workspace_get_work_area_for_monitor: assertion 'logical_monitor != NULL' failed
+  SIGSEGV
+    #0  meta_workspace_get_onmonitor_region  (libmutter-18)
+    #1  meta_window_constrain
+    #2  meta_window_move_resize_internal
+    #4  move_resize
+
+The sibling function meta_workspace_get_work_area_for_monitor() already does exactly
+this NULL check; this makes the two consistent. Callers tolerate a NULL region:
+meta_rectangle_could_fit_in_region() returns FALSE for an empty list, so
+do_screen_and_monitor_relative_constraints() exits early and skips the constraint.
+
+Upstream: same class as GNOME/mutter#3402, #1979, #4369 (open since mutter 46).
+--- a/src/core/workspace.c
++++ b/src/core/workspace.c
+@@ -1230,6 +1230,12 @@
+ 
+   data = meta_workspace_get_logical_monitor_data (workspace, logical_monitor);
+ 
++  /* The per-monitor cache is rebuilt only for monitors that still exist, so a
++   * window still referencing a just-removed monitor (e.g. on undock) gets no
++   * entry here. Guard like meta_workspace_get_work_area_for_monitor() does
++   * instead of dereferencing NULL. */
++  g_return_val_if_fail (data != NULL, NULL);
++
+   return data->logical_monitor_region;
+ }
+ 
