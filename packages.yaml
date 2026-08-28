@@ -90,6 +90,9 @@ linux-flatpaks:
       source: flathub
     org.libreoffice.LibreOffice:
       source: flathub
+    # office suite with better MS Office (docx/xlsx/pptx) fidelity than LibreOffice
+    org.onlyoffice.desktopeditors:
+      source: flathub
     org.blender.Blender:
       source: flathub
     # lightweight raster image editor (Paint.NET-style)
