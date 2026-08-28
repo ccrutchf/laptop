@@ -83,6 +83,37 @@ Secrets are **sops-nix** (`.sops.yaml`, `secrets/`); the age identity is derived
 
 **Hardware notes** (in `hosts/chris-laptop/default.nix`): NVIDIA RTX 3060 + Intel iGPU using PRIME render-offload; LUKS root with TPM2 auto-unlock (passphrase fallback); GNOME on Wayland (GDM greeter); PipeWire with HDA power-saving disabled to avoid clipped playback onsets.
 
+## Don't take the running environment down
+
+This is the user's daily-driver desktop, not a lab machine. A diagnostic that
+stops a service is **not** free and is rarely worth it — prefer read-only
+inspection (`wpctl`/`pw-cli`/`pw-dump`, `amixer`, `/proc/asound`, `/sys`) and,
+when you must change live state, the narrowest reversible knob.
+
+**Never stop `pipewire-pulse` (or `pipewire`/`wireplumber`) to free a device.**
+libpulse does not reconnect to a restarted PulseAudio server, so stopping it
+permanently detaches *every* running client until each is restarted:
+gnome-shell's volume slider and `gsd-media-keys` (spawned by gnome-session, so
+there is no unit to restart and `Alt+F2`+`r` is X11-only), plus Zen, Slack,
+Signal and Zoom. Restarting the service does not bring them back — only a
+logout does. Note that native PipeWire clients like `pw-play` reconnect fine,
+so audio can look healthy from the CLI while the whole desktop is silent;
+check `wpctl status` **Clients**/**Streams** for missing apps before declaring
+things fixed. To free an ALSA device, flip the card profile instead
+(`wpctl set-profile <dev> 0`, restore after) — the Pulse server stays up.
+
+General rules for this machine:
+- Prefer changes that take effect on the next boot/login the user chooses over
+  ones that interrupt the session now. The user reboots at their convenience.
+- Before anything disruptive, say what will break and get an explicit go-ahead.
+  "It's reversible" is not the same as "it's non-disruptive".
+- Always restore state on `INT`/`TERM`, not just `EXIT` — a script the user
+  Ctrl+Cs must leave the system as it found it.
+- Never hardcode PipeWire node IDs in a script; they are renumbered on every
+  daemon restart, and a stale ID silently targets an unrelated node (a `pw-play
+  --target` at a former sink id can end up aimed at a microphone). Resolve by
+  node name, or use the default sink.
+
 ## CI
 
 `.github/workflows/flake.yml` validates both hosts on every push/PR: the NixOS host is evaluated (a full system build is multi-GB — too big for hosted runners), the darwin host is built on a macOS runner. The darwin job requires the `dependency-manager` darwin output to be published + locked here.
