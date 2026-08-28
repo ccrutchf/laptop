@@ -122,6 +122,7 @@ in
         # to /home/chris or /Users/chris via the per-host homeDirectory.
         signingkey = "${config.home.homeDirectory}/.ssh/id_ed25519.pub";
       };
+      init.defaultBranch = "main";
       gpg.format = "ssh";
       commit.gpgsign = true;
       tag.gpgsign = true;
