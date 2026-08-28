@@ -1,5 +1,5 @@
 {
-  description = "personal machines — chris-msi (NixOS, MSI Creator 15) + chris-macbook (nix-darwin)";
+  description = "personal machines — chris-msi (NixOS, MSI Creator 15) + chris-lenovo (NixOS, ThinkPad X1 Carbon Gen 9) + chris-macbook (nix-darwin)";
 
   inputs = {
     # DELIBERATELY UNSTABLE. This is a personal daily driver, not a fleet box
@@ -102,7 +102,8 @@
   in
   {
     nixosConfigurations = {
-      chris-msi = mkNixosHost { host = "chris-msi"; };
+      chris-msi    = mkNixosHost { host = "chris-msi"; };
+      chris-lenovo = mkNixosHost { host = "chris-lenovo"; };
     };
 
     # The MacBook Air. Mirrors the NixOS host's wiring: a host module

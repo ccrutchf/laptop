@@ -2,16 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-This is a **multi-host** Nix configuration for two personal machines, in one flake tracking **`nixos-unstable`** (home-manager follows it):
+This is a **multi-host** Nix configuration for three personal machines, in one flake tracking **`nixos-unstable`** (home-manager follows it):
 
 - **`chris-msi`** — NixOS on an MSI Creator 15 A11UE. Declarative disk via **disko**, **impermanent** btrfs root (`@` reset to empty every boot, previous kept as `@old`; durable `/persist`, `/home`, `/nix`, `/var/log`, `/var/lib/docker`), hibernation, Secure Boot.
+- **`chris-lenovo`** — NixOS on a Lenovo ThinkPad X1 Carbon Gen 9 (i7-1185G7, Intel Iris Xe, **no dGPU**). Same impermanent btrfs-on-LUKS layout, but **NixOS-only** — disko wipes the whole 512GB NVMe. Hibernation and Secure Boot are **off** (the swapfile is still sized >= RAM so hibernation can be enabled later without repartitioning).
 - **`chris-macbook`** — macOS (Apple Silicon MacBook Air) via **nix-darwin**. Nix installed with the **Determinate Systems** installer (it owns the daemon, so `nix.enable = false`); macOS itself is not declaratively installed.
 
-Neither is part of the KastnerRG/krg-infra fleet.
+None of them are part of the KastnerRG/krg-infra fleet.
 
 ## Commands
 
-- **Apply (NixOS):** `sudo nixos-rebuild switch --flake .#chris-msi`
+- **Apply (NixOS):** `sudo nixos-rebuild switch --flake .#chris-msi` (or `.#chris-lenovo`)
 - **Apply (macOS):** `darwin-rebuild switch --flake .#chris-macbook`
 - Both run the home-manager activation, which runs `depend install --prune` against `packages.yaml` — converging the non-Nix layer to the manifest on both hosts (see below).
 - **Update inputs:** `nix flake update` (or a single input), then switch.
@@ -22,11 +23,12 @@ Neither is part of the KastnerRG/krg-infra fleet.
 ## Repository layout
 
 ```
-flake.nix                         mkNixosHost -> nixosConfigurations.chris-msi + darwinConfigurations.chris-macbook
+flake.nix                         mkNixosHost -> nixosConfigurations.{chris-msi,chris-lenovo} + darwinConfigurations.chris-macbook
 hosts/
   chris-msi/default.nix        NixOS host module (imports its disko-config + ../../modules/nixos/*)
   chris-msi/disko-config.nix   declarative disk (btrfs-on-LUKS, the 2TB drive ONLY)
   chris-msi/hardware-configuration.nix   kernel modules / microcode only (disko owns disk entries)
+  chris-lenovo/                   ThinkPad X1C9 host: hardware + quirks only (~85 lines)
   chris-macbook/default.nix       nix-darwin host module
 modules/nixos/
   common.nix                      SHARED by every NixOS host: boot loader, nix settings/gc,

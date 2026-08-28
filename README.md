@@ -1,6 +1,6 @@
 # laptop
 
-Multi-host Nix configuration for two personal machines, in one **flake** tracking
+Multi-host Nix configuration for three personal machines, in one **flake** tracking
 **`nixos-unstable`**, with [home-manager](https://github.com/nix-community/home-manager)
 for the user environment and [dependency-manager](https://github.com/ccrutchf/dependency-manager)
 (`depend`) for packages with no good Nix path:
@@ -9,6 +9,9 @@ for the user environment and [dependency-manager](https://github.com/ccrutchf/de
   [disko](https://github.com/nix-community/disko); **impermanent** btrfs root (reset to
   empty every boot) with durable `/persist`, `/home`, `/nix`, `/var/log`, `/var/lib/docker`;
   hibernation; Secure Boot.
+- **`chris-lenovo`** — NixOS (Lenovo ThinkPad X1 Carbon Gen 9, i7-1185G7, Intel
+  Iris Xe, no dGPU). Same impermanent btrfs-on-LUKS layout as `chris-msi`, but
+  NixOS-only (the whole 512GB NVMe is wiped) with hibernation and Secure Boot off.
 - **`chris-macbook`** — macOS (Apple Silicon) via
   [nix-darwin](https://github.com/nix-darwin/nix-darwin), Nix installed with the
   [Determinate Systems](https://github.com/DeterminateSystems/nix-installer) installer.
@@ -19,15 +22,15 @@ Personal machines; not part of the KastnerRG/krg-infra fleet.
 
 | Path | Purpose |
 | --- | --- |
-| `flake.nix` | Entry point: `mkNixosHost` → `nixosConfigurations.chris-msi` + `darwinConfigurations.chris-macbook` + inputs. |
-| `hosts/chris-msi/` | NixOS host module (`default.nix`), `disko-config.nix`, `hardware-configuration.nix` — hardware and per-machine quirks only. |
+| `flake.nix` | Entry point: `mkNixosHost` → `nixosConfigurations.{chris-msi,chris-lenovo}` + `darwinConfigurations.chris-macbook` + inputs. |
+| `hosts/chris-msi/`, `hosts/chris-lenovo/` | NixOS host modules (`default.nix`), `disko-config.nix`, `hardware-configuration.nix` — hardware and per-machine quirks only. |
 | `hosts/chris-macbook/` | nix-darwin host module (`default.nix`). |
 | `modules/nixos/` | Shared layers `common`/`desktop`/`overlays` (imported by every NixOS host) + opt-in features `impermanence`, `hibernation`, `secure-boot`, `backups`. |
 | `home/common.nix` | Cross-platform home-manager (shell stack, git, core CLIs) — both hosts. |
 | `home/linux.nix` / `home/darwin.nix` | Per-host home (imports `common.nix`); each runs `depend` on switch. Linux half configures the GNOME desktop (dconf, extensions, GTK, darkman). |
 | `packages.yaml` | Non-Nix packages, per-platform blocks, reconciled by `depend`. |
 | `.sops.yaml`, `secrets/` | sops-nix encrypted secrets (age via the Nextcloud-synced SSH key). |
-| `REBUILD.md` | Index → `REBUILD-MSI.md` (NixOS) and `REBUILD-MAC.md` (macOS) reinstall runbooks. |
+| `REBUILD.md` | Index → `REBUILD-MSI.md`, `REBUILD-LENOVO.md` (NixOS) and `REBUILD-MAC.md` (macOS) runbooks. |
 | `CLAUDE.md` | Architecture details and gotchas. |
 
 ## Everyday use
@@ -35,6 +38,7 @@ Personal machines; not part of the KastnerRG/krg-infra fleet.
 ```sh
 # NixOS
 sudo nixos-rebuild switch --flake .#chris-msi
+sudo nixos-rebuild switch --flake .#chris-lenovo
 # macOS
 darwin-rebuild switch --flake .#chris-macbook
 

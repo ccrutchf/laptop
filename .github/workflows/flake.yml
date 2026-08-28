@@ -14,13 +14,17 @@ on:
 
 jobs:
   nixos:
-    name: eval chris-msi (x86_64-linux)
+    name: eval ${{ matrix.host }} (x86_64-linux)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [chris-msi, chris-lenovo]
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
       - name: Evaluate the system closure
-        run: nix eval .#nixosConfigurations.chris-msi.config.system.build.toplevel.drvPath --raw
+        run: nix eval .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel.drvPath --raw
 
   darwin:
     name: build chris-macbook (aarch64-darwin)
