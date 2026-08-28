@@ -71,14 +71,19 @@
   };
 
   outputs = { self, nixpkgs, home-manager, disko, lanzaboote, sops-nix, ... }@inputs:
-  {
-    nixosConfigurations.chris-laptop = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
+  let
+    # Every NixOS host here gets the same module stack and the same home config;
+    # only its hosts/<name>/ directory differs. To add a machine: create
+    # hosts/<name>/{default.nix,disko-config.nix,hardware-configuration.nix} and
+    # add one line to nixosConfigurations below. The shared system layers are
+    # imported by the host module itself (modules/nixos/{common,desktop,overlays}.nix).
+    mkNixosHost = { host, system ? "x86_64-linux" }: nixpkgs.lib.nixosSystem {
+      inherit system;
       # Pass all inputs down so local modules can import e.g.
       # inputs.impermanence.nixosModules.impermanence (mirrors krg-infra).
       specialArgs = { inherit inputs; };
       modules = [
-        ./hosts/chris-laptop/default.nix   # imports its disko-config + ../../modules/nixos/*
+        (./hosts + "/${host}/default.nix")   # imports its disko-config + ../../modules/nixos/*
 
         disko.nixosModules.disko
         lanzaboote.nixosModules.lanzaboote
@@ -93,6 +98,11 @@
           home-manager.users.chris = import ./home/linux.nix;
         }
       ];
+    };
+  in
+  {
+    nixosConfigurations = {
+      chris-laptop = mkNixosHost { host = "chris-laptop"; };
     };
 
     # The MacBook Air. Mirrors the NixOS host's wiring: a host module

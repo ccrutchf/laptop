@@ -2,7 +2,7 @@
 # stack, git, and core CLIs live in ./common.nix (shared with the Mac); everything
 # here is Linux/desktop-specific (GNOME, flatpak, dconf, GTK, darkman) plus the
 # Linux `depend` activation.
-{ config, lib, pkgs, inputs, ... }:
+{ config, lib, pkgs, inputs, osConfig, ... }:
 
 let
   # `depend` for the activation hook below (also added to PATH via home-common.nix).
@@ -22,7 +22,7 @@ in
 
   # Lets `depend` (run from the activation hook and ad-hoc) resolve which flake+attr
   # to operate against without passing --flake every time.
-  home.sessionVariables.DEPEND_NIXOS_FLAKE = "${config.home.homeDirectory}/Repos/personal/laptop#chris-laptop";
+  home.sessionVariables.DEPEND_NIXOS_FLAKE = "${config.home.homeDirectory}/Repos/personal/laptop#${osConfig.networking.hostName}";
 
   # Linux/desktop packages (the portable CLIs gh/claude-code/uv/depend are in
   # home-common.nix). pipx is Linux-only here (the data-tools block in packages.yaml).

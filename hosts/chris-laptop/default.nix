@@ -7,6 +7,11 @@
   imports =
     [ ./hardware-configuration.nix
       ./disko-config.nix
+      # shared layers (see each file)
+      ../../modules/nixos/common.nix
+      ../../modules/nixos/desktop.nix
+      ../../modules/nixos/overlays.nix
+      # opt-in features, toggled by the my.* flags below
       ../../modules/nixos/impermanence.nix
       ../../modules/nixos/hibernation.nix
       ../../modules/nixos/secure-boot.nix
@@ -20,20 +25,10 @@
   my.secureBoot.enable   = false;  # PHASE 2: flip true AFTER `sbctl create-keys` (see module)
   my.backups.enable      = false;  # flip true AFTER the age key + secrets/secrets.yaml exist
 
-  # Boot loader. systemd-boot by default; modules/secure-boot.nix replaces it with
-  # lanzaboote (signed) once my.secureBoot.enable = true.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-
-  # systemd-stage1 initrd: TPM2 auto-unlock + the impermanence rollback both need it.
-  boot.initrd.systemd.enable = true;
-
   # LUKS device is created/declared by disko (disko-config.nix). Here we only add
   # the TPM2 auto-unlock opt; the keyslot is enrolled post-install with
   # systemd-cryptenroll (and re-enrolled once Secure Boot is on — see secure-boot.nix).
   boot.initrd.luks.devices."cryptroot".crypttabExtraOpts = [ "tpm2-device=auto" ];
-
-  boot.kernelPackages = pkgs.linuxPackages_latest;
 
   # zswap: compressed RAM cache in front of the disk swap (hibernation-compatible,
   # unlike zram). mem_sleep_default=deep: prefer S3 over drain-prone s2idle for the
@@ -61,10 +56,6 @@
   };
 
   networking.hostName = "chris-laptop";
-  networking.networkmanager.enable = true;
-  # openconnect plugin: AnyConnect VPN type in GNOME Settings (UCSD vpn.ucsd.edu).
-  networking.networkmanager.plugins = with pkgs; [ networkmanager-openconnect ];
-
   # NetworkManager pulls in ModemManager, which probes any USB-serial adapter
   # with AT commands the instant it appears — colliding with UART console
   # sessions (tio/minicom) and producing dropped keystrokes + high-bit garbage.
@@ -74,79 +65,11 @@
   # would stop MM touching just that port.)
   systemd.services.ModemManager.enable = lib.mkForce false;
 
-  time.timeZone = "America/Los_Angeles";
   # Dual-boot with Windows: Windows treats the RTC as local time, so match it here
   # instead of fighting it (otherwise the clock is off by the UTC offset after
   # switching OSes). The cleaner alternative is making Windows use UTC (the
   # `RealTimeIsUniversal` registry DWORD), but this matches your usual approach.
   time.hardwareClockInLocalTime = true;
-  # Was commented out (defaulting to the C locale). Set it explicitly.
-  i18n.defaultLocale = "en_US.UTF-8";
-
-  # X infrastructure: kept for the NVIDIA driver config (videoDrivers below) and
-  # XWayland. GNOME runs its Wayland session by default; GDM's own greeter is
-  # Wayland too. X stays enabled so a fallback Xorg GNOME session is available and
-  # the NVIDIA/xserver options apply.
-  services.xserver.enable = true;
-
-  # GNOME (Wayland) + GDM. GNOME provides the shell, Settings, Files (Nautilus),
-  # gnome-keyring (Secret Service for Slack/VSCode), power management (low-battery
-  # warnings + auto-suspend), lid handling, and accessibility (Large Text +
-  # fractional scaling in Settings). Desktop tweaks live in home/linux.nix (dconf,
-  # extensions, darkman light/dark).
-  services.displayManager.gdm.enable = true;
-  services.desktopManager.gnome.enable = true;
-
-  services.flatpak.enable = true;
-
-  # Location service for darkman's geoclue-based sunrise/sunset (home.nix). The
-  # demo agent (enabled by default) authorizes per-user apps against appConfig
-  # below — darkman's desktop ID must be allowlisted or it gets no fix. Mozilla
-  # Location Service shut down in 2024, so point the WiFi geolocation backend at
-  # beaconDB (its community successor); without it geoclue has no network source.
-  # If geoclue ever proves flaky, drop to fixed coords: set lat/lng + usegeoclue
-  # = false in services.darkman.settings (home.nix) and disable this.
-  services.geoclue2 = {
-    enable = true;
-    geoProviderUrl = "https://beacondb.net/v1/geolocate";
-    appConfig.darkman = {
-      isAllowed = true;
-      isSystem = false;
-      users = [ "1000" ];   # chris (id -u); geoclue keys its allowlist by uid string
-    };
-  };
-
-  # CUPS for campus/network printers.
-  services.printing.enable = true;
-  # brlaser is the de-facto driver for the Brother HL-L2370DW. Bundling the PPD
-  # here means lpadmin can build the queue WITHOUT the printer being online at
-  # switch time (unlike driverless "everywhere", which queries the device).
-  services.printing.drivers = [ pkgs.brlaser ];
-
-  # mDNS so the printer stays reachable by name across DHCP lease changes.
-  # The HL-L2370DW is on DHCP, so we address it by its stable node name
-  # (BRNxxxx.local) instead of an IP. nssmdns4 wires Avahi into NSS so CUPS /
-  # getent resolve *.local; openFirewall lets the 5353/udp replies back in.
-  services.avahi = {
-    enable = true;
-    nssmdns4 = true;
-    openFirewall = true;
-  };
-
-  # Brother HL-L2370DW, declared so it survives the impermanent-root wipe
-  # (/etc/cups and /var/lib/cups are NOT in the persist list). Node name found
-  # via `avahi-browse -rt _ipp._tcp`; brl2370d.ppd is brlaser's HL-L2370DN PPD,
-  # same engine as the DW (DN/DW differ only in ethernet vs wifi).
-  hardware.printers.ensureDefaultPrinter = "Brother_HL_L2370DW";
-  hardware.printers.ensurePrinters = [{
-    name = "Brother_HL_L2370DW";
-    location = "home";
-    deviceUri = "ipp://BRNB42200021209.local/ipp/print";
-    model = "drv:///brlaser.drv/brl2370d.ppd";
-  }];
-
-  # Bluetooth (controller present). Pinned explicitly so the flake owns it.
-  hardware.bluetooth.enable = true;
   # xpadneo: out-of-tree driver for Xbox One/Series controllers over Bluetooth.
   # Adds rumble + battery reporting and disables BT ERTM (the Enhanced Re-
   # Transmission Mode Xbox pads choke on when pairing). Pairing keys land in
@@ -179,173 +102,6 @@
     SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9008", MODE="0660", TAG+="uaccess"
   '';
 
-  # Firmware updates via LVFS (SSD/Thunderbolt/peripherals; MSI BIOS coverage is thin).
-  services.fwupd.enable = true;
-
-  # fwupd-refresh.service (the LVFS metadata timer) runs headless as the
-  # `fwupd-refresh` system user, which has no login session — so polkit scores it
-  # as "any" and the refresh-remote action defaults to auth_admin, failing with
-  # "Failed to obtain auth". Upstream fwupd ships a JS rule granting this user a
-  # pass, but NixOS's polkit only reads /etc/polkit-1/rules.d + polkit's own dir,
-  # never fwupd's package dir, so that rule never loads. Re-add it here.
-  security.polkit.extraConfig = ''
-    polkit.addRule(function(action, subject) {
-      if ((action.id == "org.freedesktop.fwupd.refresh-remote" ||
-           action.id == "org.freedesktop.fwupd.get-remotes" ||
-           action.id == "org.freedesktop.fwupd.update-metadata") &&
-          subject.user == "fwupd-refresh") {
-        return polkit.Result.YES;
-      }
-    });
-  '';
-
-  # Periodic SSD TRIM (carried forward, now explicit) + btrfs scrub (bit-rot scan).
-  services.fstrim.enable = true;
-  services.btrfs.autoScrub = {
-    enable = true;
-    interval = "weekly";
-    fileSystems = [ "/" ];   # one btrfs fs; scrubbing any subvol scrubs the device
-  };
-
-  nixpkgs.config.allowUnfree = true;
-
-  # Workaround: pipx 1.8.0's test suite fails on this nixpkgs pin — cosmetic
-  # package-spec normalization drift (`pkg@url` vs `pkg @ url`) in
-  # test_package_specifier.py, not a functional break — which otherwise fails the
-  # whole build. `depend` needs the pipx binary (packages.yaml data-tools block), so
-  # skip its checkPhase rather than dropping it. Remove once nixpkgs ships a fixed
-  # pipx — or migrate that block to `uv tool` (uv is already installed).
-  nixpkgs.overlays = [
-    (final: prev: {
-      pipx = prev.pipx.overridePythonAttrs (old: { doCheck = false; });
-
-      # cantarell-fonts 0.311 — its variable-font build autohints Cantarell-VF.otf
-      # with afdko 5.0.1's otfautohint, which regressed and now exits 1 (an empty
-      # "ERROR:") on the Cyrillic Ef even though the recipe already --exclude-glyphs
-      # uni0424. That fails the WHOLE system build: cantarell is a default fontconfig
-      # font (→ X11-fonts → fontconfig-cache → system-path). nixos-unstable's head
-      # (b5aa0fb) is itself broken and no earlier rev past the afdko-5.0.1 bump is
-      # good, so there's nothing to pin/revert to — and `depend update` re-pulls the
-      # broken head every time. make-variable-font.py runs otfautohint IN-PLACE on an
-      # already-saved+cleaned VF and the next step (subroutinize) re-reads that same
-      # file, so skipping the autohint yields a valid, un-hinted VF — imperceptible on
-      # this HiDPI/Wayland setup, and only the VF is touched (static instances build
-      # normally). Short-circuit the sole check_call so otfautohint never runs;
-      # --replace-fail trips the build loudly if upstream restructures the script.
-      # Drop once afdko's otfautohint is fixed upstream (then cantarell builds clean).
-      cantarell-fonts = prev.cantarell-fonts.overrideAttrs (old: {
-        postPatch = (old.postPatch or "") + ''
-          substituteInPlace scripts/make-variable-font.py \
-            --replace-fail "subprocess.check_call(" "0 and subprocess.check_call("
-        '';
-      });
-
-      # envfs 1.2.0 — nixpkgs still ships 1.1.0, whose single-threaded FUSE daemon
-      # DEADLOCKS whenever a caller's PATH contains /bin or /usr/bin: it re-enters its
-      # own mount and every exec through /bin·/usr/bin then hangs in D-state
-      # (Mic92/envfs#145/#196). That froze the GNOME desktop on every wipe-enabled gen.
-      # 1.2.0 fixes it ("Avoid FUSE deadlocks by resolving paths with O_PATH fds").
-      # This is exactly nixpkgs PR #500707 (package-only bump) applied as an overlay;
-      # it stays on nixpkgs' fetchCargoVendor, which pulls crates from the
-      # static.crates.io CDN — NOT the upstream flake's importCargoLock, which 403s on
-      # crates.io's legacy /api/v1/download endpoint. Drop this once #500707 lands.
-      envfs = prev.envfs.overrideAttrs (old: rec {
-        version = "1.2.0";
-        src = final.fetchFromGitHub {
-          owner = "Mic92";
-          repo = "envfs";
-          rev = version;
-          hash = "sha256-hj/6zS9ebF0IDqgc1Dne59nWx80nk6jn2gj8BzQUFIQ=";
-        };
-        cargoDeps = final.rustPlatform.fetchCargoVendor {
-          inherit src;
-          name = "envfs-${version}-vendor";
-          hash = "sha256-dz3gpE464jnmSDsAsmJHcxUsEKeUURNoUjgGU2214Xg=";
-        };
-      });
-
-      # gnome-shell's vendored libgvc — SEGFAULTS when a dock's audio card is
-      # enumerated/torn down. PulseAudio leaves pa_card_info::active_profile NULL for a
-      # card with no usable profile (pipewire-pulse logs "card N port M profiles
-      # inconsistent"), and update_card() dereferences it unconditionally:
-      #   segfault at 0 ... in libgvc.so, #0 _pa_context_get_card_info_by_index_cb
-      # Same failure mode as the mutter patch below (unguarded NULL on device teardown),
-      # different subsystem — this one fires on REdock, the mutter one on undock. Guards
-      # both derefs; the second skips the call rather than passing NULL into
-      # gvc_mixer_card_set_profile(), which would crash in g_str_equal(). Present in
-      # libgnome-volume-control master too, so not a "wait for the next bump" fix.
-      gnome-shell = prev.gnome-shell.overrideAttrs (old: {
-        patches = (old.patches or [ ]) ++ [ ../../patches/gnome-shell-gvc-active-profile-null-guard.patch ];
-      });
-
-      # mutter 50.2 — SEGFAULTS on every undock of the Thunderbolt dock. On a monitor
-      # change mutter clears workspace->logical_monitor_data, then rebuilds it in
-      # meta_workspace_ensure_work_areas_validated() by iterating only the monitors that
-      # STILL EXIST. A queued move_resize for a window on the just-removed monitor then
-      # reaches meta_workspace_get_onmonitor_region(), whose cache lookup returns NULL and
-      # is dereferenced unguarded -> SIGSEGV in meta_window_constrain. Its sibling
-      # meta_workspace_get_work_area_for_monitor() already has exactly this NULL check;
-      # the patch makes the two consistent. Not extension-related: reproduced with
-      # dash-to-dock disabled (upstream GNOME/mutter#3402, #1979, #4369 agree). Still
-      # unfixed on mutter main as of 2026-08-11 with no MR in flight, so this is not a
-      # "wait for the next bump" workaround — drop it only once upstream lands a guard.
-      mutter = prev.mutter.overrideAttrs (old: {
-        patches = (old.patches or [ ]) ++ [ ../../patches/mutter-onmonitor-region-null-guard.patch ];
-      });
-
-      # wivrn 26.6 — nixpkgs still ships 26.2.3, but the Quest headset's WiVRn
-      # client auto-updated to 26.6 and the server/client protocol must match or
-      # the streamer refuses the session. This is nixpkgs PR #531078 (a one-file
-      # package-only bump, fully reviewed + green CI, queued for merge) applied as
-      # an overlay: callPackage the PR's package.nix straight from the maintainer's
-      # branch. The new version is API-compatible, so services.wivrn below needs no
-      # changes. Drop this once #531078 lands and unstable catches up (gh pr view
-      # 531078 -R NixOS/nixpkgs --json state).
-      wivrn = prev.callPackage
-        (final.fetchurl {
-          url = "https://raw.githubusercontent.com/PassiveLemon/nixpkgs/67a2cb0ba141df83a9b5625b54d0a9023ebd05f2/pkgs/by-name/wi/wivrn/package.nix";
-          hash = "sha256-95RL8JYD2kzPUgyMzjWOaKT2RU5VAsmEyyDnCX/ESmg=";
-        })
-        {};
-    })
-  ];
-
-  nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
-    auto-optimise-store   = true;
-    # Trust wheel so per-project devshell / cachix substituters (rust-overlay, the
-    # CUDA cache, project caches) are honored instead of silently ignored. Safe
-    # here — single-user box, and chris already has sudo.
-    trusted-users = [ "root" "@wheel" ];
-    # Keep dev-shell build inputs from being GC'd (pairs with direnv/nix-direnv).
-    keep-outputs     = true;
-    keep-derivations = true;
-    # CUDA binary cache: download CUDA-enabled packages instead of compiling them.
-    extra-substituters       = [ "https://cuda-maintainers.cachix.org" ];
-    extra-trusted-public-keys = [ "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E=" ];
-  };
-
-  nix.gc = {
-    automatic = true;
-    dates     = "weekly";
-    options   = "--delete-older-than 30d";
-  };
-
-  # `comma`: run any nixpkgs binary on demand (`, ffmpeg`) without installing it,
-  # and command-not-found suggestions. Uses the prebuilt nix-index database (the
-  # nix-index-database flake input) so it works immediately — no manual `nix-index`.
-  programs.nix-index.enable = true;
-  programs.nix-index-database.comma.enable = true;
-
-  # The home-manager activation runs `depend install` (packages.yaml: flatpaks,
-  # vscode extensions, pipx) on every switch. On a FRESH/impermanent install that's
-  # a multi-GB first-boot download that overran the default start timeout and got
-  # SIGTERM'd mid-install. Give it headroom — it's a one-time cost (user flatpaks
-  # then persist on /home). (A sturdier design would move `depend` into its own
-  # non-blocking oneshot service instead of the activation; this fixes the timeout.)
-  # (home-manager sets this to "5m" by default — that was the 5-minute kill.)
-  systemd.services.home-manager-chris.serviceConfig.TimeoutStartSec = lib.mkForce "30min";
-
   # NVIDIA RTX 3060 Mobile (Ampere) + Intel Tiger Lake iGPU. PRIME render offload:
   # iGPU drives the display, NVIDIA on demand via the `nvidia-offload` wrapper.
   hardware.graphics = {
@@ -373,48 +129,6 @@
     };
   };
 
-  fonts = {
-    # ubuntu-classic ships the Ubuntu / Ubuntu Mono families; Noto gives broad
-    # Unicode + a real serif; liberation covers the Arial/Times/Courier metric-
-    # compatible aliases documents expect; JetBrainsMono Nerd Font is the mono
-    # default below (terminal/VSCode) and carries glyphs.
-    packages = with pkgs; [
-      ubuntu-classic
-      noto-fonts
-      noto-fonts-color-emoji
-      liberation_ttf
-      nerd-fonts.jetbrains-mono
-    ];
-
-    fontconfig = {
-      # The bare NixOS fallback is DejaVu — high-contrast and crunchy, and it's
-      # what non-GTK apps reach for with no defaultFonts set. Pin the smoother
-      # Ubuntu family as the sans default and JetBrainsMono Nerd Font for mono
-      # (consistent with the terminal/Waybar and carries glyphs).
-      defaultFonts = {
-        sansSerif = [ "Ubuntu" "Noto Sans" ];
-        serif     = [ "Noto Serif" ];
-        monospace = [ "JetBrainsMono Nerd Font" "Ubuntu Mono" ];
-        emoji     = [ "Noto Color Emoji" ];
-      };
-      # GNOME fractional scaling (org/gnome/mutter experimental-features in
-      # home/linux.nix) rasterizes then downscales, so LCD subpixel order no
-      # longer aligns with the panel — keep grayscale AA + slight hinting, NOT
-      # rgb subpixel (which fringes here).
-      antialias = true;
-      hinting = { enable = true; style = "slight"; };
-      subpixel.rgba = "none";
-    };
-  };
-
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    pulse.enable = true;
-  };
-  security.rtkit.enable = true;
-
   # The external monitor's own audio volume (DDC/CI VCP 0x62) is a gain stage
   # the audio stack CANNOT see. HDMI/DP sinks expose no ALSA volume control at
   # all, so PipeWire, every mixer and the codec pins all read a flat 0 dB while
@@ -425,6 +139,7 @@
   #     ddcutil detect --brief && ddcutil getvcp 62
   # Pinned to full scale here; listening level is the speakers' own knob.
   hardware.i2c.enable = true;   # i2c-dev + udev rules -> /dev/i2c-*
+  users.users.chris.extraGroups = [ "i2c" ];   # base set in modules/nixos/common.nix
 
   systemd.services.monitor-audio-full-scale = {
     description = "Pin the external monitor's DDC/CI audio volume to full scale";
@@ -444,28 +159,6 @@
     '';
   };
 
-  # Declarative passwords — REQUIRED under impermanence: /etc/shadow lives on the
-  # ephemeral root, so a `passwd`-set password is wiped on every @ rollback. The
-  # hash lives in durable /persist (NOT in this repo). Create/rotate it with:
-  #     mkpasswd -m sha-512 | sudo tee /persist/passwd/chris   # then: sudo chmod 600
-  # zsh is the interactive login shell (see home.nix for the zsh/atuin/starship
-  # stack) — chosen over fish to keep POSIX muscle memory intact for tech-support
-  # work on other people's machines, and to match the Mac. System-level enable
-  # registers it in /etc/shells; the per-user config lives in home-manager.
-  programs.zsh.enable = true;
-
-  users.mutableUsers = false;
-  users.users.chris = {
-    isNormalUser = true;
-    hashedPasswordFile = "/persist/passwd/chris";
-    shell = pkgs.zsh;
-    # dialout = serial/UART console access (junkyard UART work, /dev/ttyUSB*).
-    extraGroups = [ "wheel" "docker" "dialout" "input" "tty" "uucp" "i2c" ];
-  };
-  # No direct root login; admin via sudo (chris in wheel).
-  users.users.root.hashedPassword = "!";
-
-  virtualisation.docker.enable = true;
   # GPU-accelerated containers: `docker run --gpus all ...` (PyTorch/TF/CUDA images).
   hardware.nvidia-container-toolkit.enable = true;
 
@@ -487,49 +180,6 @@
       __GLX_VENDOR_LIBRARY_NAME = "nvidia";
       __VK_LAYER_NV_optimus = "NVIDIA_only";
     };
-  };
-
-  # Dynamic-loader shim for prebuilt (non-Nix) ELF binaries — lets the plain
-  # (non-FHS) VSCode run extensions that download native binaries.
-  programs.nix-ld.enable = true;
-  # Libraries that prebuilt (pip/conda) wheels dlopen via nix-ld — without these
-  # `import cv2` dies with "libGL.so.1: cannot open object file". Covers
-  # opencv-python / numpy / torch wheels and the Android SDK's prebuilt binaries.
-  # (CUDA wheels ship their own CUDA libs; libcuda comes from the NVIDIA driver.)
-  programs.nix-ld.libraries = with pkgs; [
-    stdenv.cc.cc.lib            # libstdc++
-    zlib
-    glib                        # libgthread (opencv)
-    libGL libglvnd              # cv2 / rendering
-    openssl
-    libx11 libxext libxrender libsm libice
-    libxtst libxi                # JetBrains/Java GUI input (Toolbox-installed IDEs)
-    libsecret                    # JetBrains credential storage
-    libxkbcommon
-    fontconfig freetype
-  ];
-
-  # envfs: a FUSE filesystem over /usr/bin and /bin that resolves any
-  # `/usr/bin/<tool>` / `/bin/<tool>` (and `#!/usr/bin/env <x>` shebangs) against
-  # PATH at runtime — NixOS has no FHS, so prebuilt scripts/binaries that hardcode
-  # those paths otherwise die. Complements nix-ld (loader shim for prebuilt ELFs).
-  # NOTE: the impermanence initrd reseed of /usr/bin/env (modules/impermanence.nix)
-  # is still required — it satisfies the systemd-258 PID1 /usr check before envfs's
-  # stage-2 mount is up.
-  services.envfs = {
-    enable = true;
-    # package comes from the overlay above (envfs 1.2.0, fixes the FUSE deadlock).
-    # Make these resolve at /bin/<x> and /usr/bin/<x> regardless of the caller's PATH,
-    # so Bazel/kleaf actions (which run with a sanitized PATH) can exec /bin/bash and
-    # /usr/bin/env python3. Without this, envfs only resolves names on the caller's PATH,
-    # which Bazel strips per-action — the reason the kleaf build fails in a plain shell.
-    extraFallbackPathCommands = ''
-      for p in ${pkgs.bash} ${pkgs.coreutils} ${pkgs.python3} ${pkgs.perl} \
-               ${pkgs.gnused} ${pkgs.gnugrep} ${pkgs.gawk} ${pkgs.findutils} \
-               ${pkgs.gnutar} ${pkgs.gzip} ${pkgs.diffutils} ${pkgs.which}; do
-        for f in "$p"/bin/*; do ln -sfn "$f" "$out/$(basename "$f")"; done
-      done
-    '';
   };
 
   # --- Gaming (Steam / Proton) ---
@@ -586,8 +236,6 @@
     tio               # serial terminal for UART console work (junkyard etc.)
     alvr              # SteamVR->Quest streaming, fallback VR path (opens its own LAN ports at runtime)
   ]);
-
-  networking.firewall.enable = true;
 
   # See the comment in the original: keep in sync with home.stateVersion.
   system.stateVersion = "25.11";
