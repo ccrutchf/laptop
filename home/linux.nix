@@ -147,6 +147,11 @@ in
     };
 
     "org/gnome/shell" = {
+      # GNOME's global extension kill switch. The Extensions app or a failed
+      # session can flip this to true, which silently overrides
+      # enabled-extensions and leaves every extension stuck at INITIALIZED.
+      # dconf lives on persistent /home, so it survives rebuilds -- pin it.
+      disable-user-extensions = false;
       enabled-extensions = [
         "dash-to-dock@micxgx.gmail.com"
         "appindicatorsupport@rgcjonas.gmail.com"
