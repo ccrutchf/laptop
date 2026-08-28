@@ -92,9 +92,12 @@ in
   # check is a harmless false positive here. It otherwise prints on every shell
   # start (including every non-interactive shell), so silence it.
   home.sessionVariables._ZO_DOCTOR = "0";
+  # atuin's integration is sourced after fzf's and takes Ctrl-R either way; drop
+  # fzf's history widget so home-manager stops warning about the double binding.
   programs.fzf = {
     enable = true;
     enableZshIntegration = true;
+    historyWidget.command = "";
   };
 
   # Cross-platform CLIs (per the rebuild decision: these come from Nix on both
