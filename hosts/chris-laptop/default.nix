@@ -415,6 +415,35 @@
   };
   security.rtkit.enable = true;
 
+  # The external monitor's own audio volume (DDC/CI VCP 0x62) is a gain stage
+  # the audio stack CANNOT see. HDMI/DP sinks expose no ALSA volume control at
+  # all, so PipeWire, every mixer and the codec pins all read a flat 0 dB while
+  # the panel quietly halved everything on its way to the powered speakers on
+  # its headphone jack -- it shipped at 50/100. Chased this through PipeWire,
+  # the SOF DSP topology and legacy snd_hda_intel before finding it; if audio
+  # is ever "quiet with everything at unity" again, check VCP 0x62 FIRST:
+  #     ddcutil detect --brief && ddcutil getvcp 62
+  # Pinned to full scale here; listening level is the speakers' own knob.
+  hardware.i2c.enable = true;   # i2c-dev + udev rules -> /dev/i2c-*
+
+  systemd.services.monitor-audio-full-scale = {
+    description = "Pin the external monitor's DDC/CI audio volume to full scale";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "systemd-udev-settle.service" ];
+    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; };
+    # DDC over a freshly-enumerated DP link is racy: the DRM connector can be up
+    # before the panel answers on i2c. Retry, and never fail the boot over it.
+    script = ''
+      for i in $(seq 1 10); do
+        if ${pkgs.ddcutil}/bin/ddcutil --model LU28R55 setvcp 62 100; then
+          echo "monitor VCP 0x62 set to 100"; exit 0
+        fi
+        sleep 5
+      done
+      echo "monitor did not answer DDC/CI; left its volume alone" >&2
+    '';
+  };
+
   # Declarative passwords — REQUIRED under impermanence: /etc/shadow lives on the
   # ephemeral root, so a `passwd`-set password is wiped on every @ rollback. The
   # hash lives in durable /persist (NOT in this repo). Create/rotate it with:
@@ -431,7 +460,7 @@
     hashedPasswordFile = "/persist/passwd/chris";
     shell = pkgs.zsh;
     # dialout = serial/UART console access (junkyard UART work, /dev/ttyUSB*).
-    extraGroups = [ "wheel" "docker" "dialout" "input" "tty" "uucp" ];
+    extraGroups = [ "wheel" "docker" "dialout" "input" "tty" "uucp" "i2c" ];
   };
   # No direct root login; admin via sudo (chris in wheel).
   users.users.root.hashedPassword = "!";
@@ -545,6 +574,7 @@
     ]) ++ (with pkgs; [
     cudatoolkit       # nvcc + CUDA libraries on PATH
     pciutils          # lspci
+    ddcutil           # monitor DDC/CI control (see monitor-audio-full-scale)
     android-tools     # adb + fastboot
     qdl               # flash Qualcomm boards (Rubik Pi 3) over EDL/9008
     dnsutils          # nslookup, dig, host
