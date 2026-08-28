@@ -3,7 +3,7 @@
 # Each host's home-manager activation runs `depend install --prune` against this
 # file, so every block is the source of truth: anything its providers manage that
 # is NOT listed gets removed on the next switch. One block per (platform × purpose);
-# the `platform:` key scopes it to a host — chris-laptop is `linux`, chris-macbook
+# the `platform:` key scopes it to a host — the NixOS hosts are `linux`, chris-macbook
 # is `osx`, `all` is both.
 
 
@@ -61,7 +61,7 @@ vscode-extensions:
       dependencies: [visual-studio-code]
 
 
-# ── Linux · chris-laptop ─────────────────────────────────────────────────────
+# ── Linux · NixOS hosts ─────────────────────────────────────────────────────
 
 # Desktop apps via Flathub.
 linux-flatpaks:

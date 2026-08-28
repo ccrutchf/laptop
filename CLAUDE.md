@@ -4,31 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a **multi-host** Nix configuration for two personal machines, in one flake tracking **`nixos-unstable`** (home-manager follows it):
 
-- **`chris-laptop`** — NixOS on an MSI Creator 15 A11UE. Declarative disk via **disko**, **impermanent** btrfs root (`@` reset to empty every boot, previous kept as `@old`; durable `/persist`, `/home`, `/nix`, `/var/log`, `/var/lib/docker`), hibernation, Secure Boot.
+- **`chris-msi`** — NixOS on an MSI Creator 15 A11UE. Declarative disk via **disko**, **impermanent** btrfs root (`@` reset to empty every boot, previous kept as `@old`; durable `/persist`, `/home`, `/nix`, `/var/log`, `/var/lib/docker`), hibernation, Secure Boot.
 - **`chris-macbook`** — macOS (Apple Silicon MacBook Air) via **nix-darwin**. Nix installed with the **Determinate Systems** installer (it owns the daemon, so `nix.enable = false`); macOS itself is not declaratively installed.
 
 Neither is part of the KastnerRG/krg-infra fleet.
 
 ## Commands
 
-- **Apply (NixOS):** `sudo nixos-rebuild switch --flake .#chris-laptop`
+- **Apply (NixOS):** `sudo nixos-rebuild switch --flake .#chris-msi`
 - **Apply (macOS):** `darwin-rebuild switch --flake .#chris-macbook`
 - Both run the home-manager activation, which runs `depend install --prune` against `packages.yaml` — converging the non-Nix layer to the manifest on both hosts (see below).
 - **Update inputs:** `nix flake update` (or a single input), then switch.
-- **Validate without activating:** `nixos-rebuild build --flake .#chris-laptop`, or `nix build .#darwinConfigurations.chris-macbook.system`, or `nix eval .#nixosConfigurations.chris-laptop.config.system.build.toplevel.drvPath` (cheap eval). CI does this for both hosts (`.github/workflows/flake.yml`). Confirm a change builds before switching — and ALWAYS before a disk wipe.
-- **Full reinstall:** `REBUILD.md` is the index → `REBUILD-NIXOS.md` (NixOS, disko wipes the 2TB drive; Windows on the other NVMe is untouched) and `REBUILD-MAC.md` (macOS bootstrap).
+- **Validate without activating:** `nixos-rebuild build --flake .#chris-msi`, or `nix build .#darwinConfigurations.chris-macbook.system`, or `nix eval .#nixosConfigurations.chris-msi.config.system.build.toplevel.drvPath` (cheap eval). CI does this for both hosts (`.github/workflows/flake.yml`). Confirm a change builds before switching — and ALWAYS before a disk wipe.
+- **Full reinstall:** `REBUILD.md` is the index → `REBUILD-MSI.md` (NixOS, disko wipes the 2TB drive; Windows on the other NVMe is untouched) and `REBUILD-MAC.md` (macOS bootstrap).
 - **Preview non-Nix package changes:** `depend plan --config packages.yaml` (add `--prune` to also preview removals). `nixos-rebuild`/`darwin-rebuild` evaluation is the only validation — there is no separate test suite here.
 
 ## Repository layout
 
 ```
-flake.nix                         nixosConfigurations.chris-laptop + darwinConfigurations.chris-macbook
+flake.nix                         mkNixosHost -> nixosConfigurations.chris-msi + darwinConfigurations.chris-macbook
 hosts/
-  chris-laptop/default.nix        NixOS host module (imports its disko-config + ../../modules/nixos/*)
-  chris-laptop/disko-config.nix   declarative disk (btrfs-on-LUKS, the 2TB drive ONLY)
-  chris-laptop/hardware-configuration.nix   kernel modules / microcode only (disko owns disk entries)
+  chris-msi/default.nix        NixOS host module (imports its disko-config + ../../modules/nixos/*)
+  chris-msi/disko-config.nix   declarative disk (btrfs-on-LUKS, the 2TB drive ONLY)
+  chris-msi/hardware-configuration.nix   kernel modules / microcode only (disko owns disk entries)
   chris-macbook/default.nix       nix-darwin host module
-modules/nixos/                    NixOS feature modules: impermanence, hibernation, secure-boot, backups
+modules/nixos/
+  common.nix                      SHARED by every NixOS host: boot loader, nix settings/gc,
+                                  the chris user, networking, fonts, audio, nix-ld, envfs
+  desktop.nix                     SHARED: GNOME on GDM, geoclue, CUPS+Avahi, Bluetooth
+  overlays.nix                    SHARED: package fixes (pipx, cantarell, envfs, gnome-shell, mutter, wivrn)
+  impermanence / hibernation / secure-boot / backups   opt-in my.* features
 home/
   common.nix                      cross-platform home-manager (shell stack, git, core CLIs, claude-backup) — BOTH hosts
   linux.nix                       Linux/desktop home (GNOME/flatpak/dconf/GTK/darkman) + Linux depend hook
@@ -41,7 +46,7 @@ packages.yaml                     non-Nix packages, per-platform blocks, reconci
 
 ## Package management — know the layer AND the platform
 
-1. **System packages** → `environment.systemPackages` in `hosts/chris-laptop/default.nix` (NixOS) — CLIs, drivers, system tools.
+1. **System packages** → `environment.systemPackages` in `hosts/chris-msi/default.nix` (NixOS) — CLIs, drivers, system tools.
 2. **Cross-platform user CLIs** → `home.packages` in `home/common.nix` (shared by both hosts: `gh`, `claude-code`, `uv`, `depend`).
 3. **Host-specific GUI/desktop** → `home.packages` in `home/linux.nix` (vscode, android-studio, keepass, GNOME bits) or `home/darwin.nix` (currently minimal).
 4. **Non-Nix packages** → `packages.yaml`, reconciled by `depend`. On Linux: Flatpaks, VSCode/browser extensions, pipx (blocks scoped `platform: linux`). On macOS: Homebrew `brew`/`cask` + Mac App Store `mas` (the `platform: osx` block).
@@ -70,7 +75,7 @@ A top-level map of named blocks. Each has filter keys (`platform`, `architecture
 
 **Convergence/prune (both hosts):** depend's `--prune` removes installed-but-undeclared packages. A safety rail skips any provider that declares **zero** packages on the current platform — so an empty section (e.g. `brew:`/`cask:`/`mas:`) means depend leaves that provider untouched until you actually list things. This is intentionally why nix-darwin's `homebrew` module is NOT used: one `packages.yaml` drives the non-Nix layer on both machines.
 
-## `my.*` feature modules (`modules/nixos/`, toggled in `hosts/chris-laptop/default.nix`)
+## `my.*` feature modules (`modules/nixos/`, toggled in `hosts/chris-msi/default.nix`)
 
 - `impermanence.nix` — btrfs root rollback in initrd: each boot `@` → `@old` (recoverable) and recreated EMPTY (a recursive delete first clears the subvolumes systemd nests under `@`). Plus the `/persist` bind list. Ordered after the LUKS device + `systemd-hibernate-resume.service`; reseeds `/usr/bin/env` for the systemd-258 empty-`/usr` PID1 freeze. **GOTCHA:** the rollback's `mount`/`btrfs` binaries must be in `boot.initrd.systemd.storePaths`. Because `/etc/shadow` is on the ephemeral root, **passwords are declarative**: `users.users.chris.hashedPasswordFile` (hash in `/persist`, not git) + `users.mutableUsers = false`.
 - `hibernation.nix` — lid matrix (docked→`ignore`, AC/battery→suspend-then-hibernate); resume from the NoCoW `/swap/swapfile` (`resume_offset` is install-specific — re-derive on reinstall).
@@ -79,9 +84,9 @@ A top-level map of named blocks. Each has filter keys (`platform`, `architecture
 
 The desktop is **GNOME on Wayland** via **GDM** (`services.desktopManager.gnome` + `services.displayManager.gdm` in the host module). GNOME owns power management (low-battery warnings + auto-suspend), lid handling, gnome-keyring (Secret Service), and accessibility (Large Text + fractional scaling in Settings). Desktop tweaks are home-manager: `home/linux.nix` sets dconf (extensions, dash-to-dock, fractional scaling, fonts), GTK, and **darkman** for sunrise/sunset light↔dark. *(The repo previously ran a Hyprland-only session with a greetd/ReGreet greeter; that was removed in favor of GNOME — see git history if resurrecting any of it.)*
 
-Secrets are **sops-nix** (`.sops.yaml`, `secrets/`); the age identity is derived (`ssh-to-age`) from the SSH key synced via Nextcloud, so every personal machine decrypts and a reinstall doesn't lose it. **Disk:** `hosts/chris-laptop/disko-config.nix` is btrfs-on-LUKS, **the 2TB drive ONLY** — Windows lives on a separate, never-referenced NVMe.
+Secrets are **sops-nix** (`.sops.yaml`, `secrets/`); the age identity is derived (`ssh-to-age`) from the SSH key synced via Nextcloud, so every personal machine decrypts and a reinstall doesn't lose it. **Disk:** `hosts/chris-msi/disko-config.nix` is btrfs-on-LUKS, **the 2TB drive ONLY** — Windows lives on a separate, never-referenced NVMe.
 
-**Hardware notes** (in `hosts/chris-laptop/default.nix`): NVIDIA RTX 3060 + Intel iGPU using PRIME render-offload; LUKS root with TPM2 auto-unlock (passphrase fallback); GNOME on Wayland (GDM greeter); PipeWire with HDA power-saving disabled to avoid clipped playback onsets.
+**Hardware notes** (in `hosts/chris-msi/default.nix`): NVIDIA RTX 3060 + Intel iGPU using PRIME render-offload; LUKS root with TPM2 auto-unlock (passphrase fallback); GNOME on Wayland (GDM greeter); PipeWire with HDA power-saving disabled to avoid clipped playback onsets.
 
 ## Don't take the running environment down
 

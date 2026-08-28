@@ -46,7 +46,7 @@ hibernation) are simply **not** imported — WSL has no disk/boot/lid concerns.
       flake, mirroring the laptop/mac blocks.
 - [ ] CI: add `chris-windows-wsl` to the eval matrix in
       `.github/workflows/flake.yml` — it evaluates on the Linux runner exactly like
-      `chris-laptop` (no special runner needed; it's a NixOS config).
+      `chris-msi` (no special runner needed; it's a NixOS config).
 
 ### Bootstrap (future REBUILD-WINDOWS.md, WSL section)
 - [ ] `wsl --install`, import the NixOS-WSL tarball as the distro.

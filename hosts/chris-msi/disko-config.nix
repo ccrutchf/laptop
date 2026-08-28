@@ -1,4 +1,4 @@
-# Declarative disk layout for chris-laptop (via disko).
+# Declarative disk layout for chris-msi (via disko).
 #
 # GOTCHA — disko is DESTRUCTIVE and NOT idempotent. `disko --mode disko` (or
 # nixos-anywhere) WIPES and repartitions every device listed below, every run.

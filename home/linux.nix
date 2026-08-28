@@ -1,4 +1,4 @@
-# Linux (NixOS) home-manager config for chris-laptop. The cross-platform shell
+# Linux (NixOS) home-manager config, shared by every NixOS host. The cross-platform shell
 # stack, git, and core CLIs live in ./common.nix (shared with the Mac); everything
 # here is Linux/desktop-specific (GNOME, flatpak, dconf, GTK, darkman) plus the
 # Linux `depend` activation.

@@ -9,7 +9,7 @@
 # To turn on:
 #   1. ensure the Nextcloud-synced SSH key is at ~/.ssh/id_ed25519
 #   2. populate secrets/secrets.yaml (restic password + the rclone.conf) — see .sops.yaml
-#   3. set my.backups.enable = true; sudo nixos-rebuild switch --flake .#chris-laptop
+#   3. set my.backups.enable = true; sudo nixos-rebuild switch --flake .#<host>
 { config, lib, pkgs, ... }:
 with lib;
 let
@@ -30,7 +30,7 @@ in {
 
     services.restic.backups.repos = {
       paths = [ "/home/chris/Repos" ];
-      repository = "rclone:nextcloud:Backups/chris-laptop-repos";
+      repository = "rclone:nextcloud:Backups/${config.networking.hostName}-repos";
       passwordFile = config.sops.secrets."restic/password".path;
       rcloneConfigFile = config.sops.secrets."restic/rclone-conf".path;
 

@@ -1,4 +1,4 @@
-# chris-laptop rebuild runbook
+# chris-msi rebuild runbook
 
 From-scratch reinstall onto the **2TB Samsung 990** (btrfs-on-LUKS, impermanent
 root, hibernation, Secure Boot). **Windows on the 1TB Samsung 980 is never
@@ -15,7 +15,7 @@ touched** — disko only references the 2TB by-id.
 - [ ] **Confirm the SSH key is in Nextcloud** — it's the sops/age identity *and*
       the commit-signing key.
 - [ ] **Windows BitLocker recovery key handy** — Secure Boot will prompt once.
-- [ ] De-risk: on the CURRENT machine, `nixos-rebuild build --flake .#chris-laptop`
+- [ ] De-risk: on the CURRENT machine, `nixos-rebuild build --flake .#chris-msi`
       (and `nix flake lock`) so eval/build errors surface while it still works.
       (KeePass is read-only from a backup; the VPN is trivially recreatable — nothing to save.)
 
@@ -27,7 +27,7 @@ ls -l /dev/disk/by-id/ | grep -i 990_EVO    # must be the Samsung 990, NOT the 9
 Clone the repo, then run disko against the 2TB drive only (prompts for the LUKS passphrase):
 ```sh
 sudo nix --experimental-features "nix-command flakes" \
-  run github:nix-community/disko -- --mode disko ./hosts/chris-laptop/disko-config.nix
+  run github:nix-community/disko -- --mode disko ./hosts/chris-msi/disko-config.nix
 ```
 
 > No `@blank` step is needed — the impermanence rollback recreates `@` empty on
@@ -43,7 +43,7 @@ sudo mkdir -p /mnt/persist/passwd
 mkpasswd -m sha-512 | sudo tee /mnt/persist/passwd/chris
 sudo chmod 600 /mnt/persist/passwd/chris
 
-sudo nixos-install --no-root-passwd --flake /path/to/repo#chris-laptop   # root is declaratively locked
+sudo nixos-install --no-root-passwd --flake /path/to/repo#chris-msi   # root is declaratively locked
 # reboot
 ```
 
@@ -59,7 +59,7 @@ sudo nixos-install --no-root-passwd --flake /path/to/repo#chris-laptop   # root 
   ```sh
   sudo btrfs inspect-internal map-swapfile -r /swap/swapfile
   ```
-  Set `my.hibernation.resumeOffset` in `hosts/chris-laptop/default.nix` (the option
+  Set `my.hibernation.resumeOffset` in `hosts/chris-msi/default.nix` (the option
   lives in `modules/nixos/hibernation.nix`), then rebuild.
 - [ ] **sops / restic:** add your recipient to `.sops.yaml`
       (`ssh-to-age < ~/.ssh/id_ed25519.pub`), create `secrets/secrets.yaml`
@@ -78,8 +78,8 @@ If it cold-boots, `resume_offset` is wrong — recompute it in step 3 and rebuil
 ## 5. Secure Boot (phase 2)
 ```sh
 sudo sbctl create-keys
-# set my.secureBoot.enable = true; in hosts/chris-laptop/default.nix
-sudo nixos-rebuild switch --flake .#chris-laptop
+# set my.secureBoot.enable = true; in hosts/chris-msi/default.nix
+sudo nixos-rebuild switch --flake .#chris-msi
 # reboot -> firmware -> put Secure Boot in "setup mode"
 sudo sbctl enroll-keys --microsoft     # MS keys too, so Windows still boots
 # enable Secure Boot in firmware; Windows asks for the BitLocker key once
@@ -93,6 +93,6 @@ sudo systemd-cryptenroll --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=0+2+7 \
 ```
 
 ## Day-to-day
-- Apply: `sudo nixos-rebuild switch --flake .#chris-laptop`
-- Update: `nix flake update && sudo nixos-rebuild switch --flake .#chris-laptop`
+- Apply: `sudo nixos-rebuild switch --flake .#chris-msi`
+- Update: `nix flake update && sudo nixos-rebuild switch --flake .#chris-msi`
 - Generations/rollback still work — the store (`/nix`) and boot entries are durable.

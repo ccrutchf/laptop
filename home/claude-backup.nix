@@ -14,10 +14,12 @@
 # REQUIRED companion step (client-side GUI state, not expressible in Nix): remove
 # the live ~/.claude folder from the Nextcloud desktop client's sync list, or the
 # live directory keeps being synced directly and this is pointless.
-{ pkgs, lib, config, ... }:
+{ pkgs, lib, config, osConfig ? null, ... }:
 let
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
-  host = if isDarwin then "chris-macbook" else "chris-laptop";
+  # NixOS hosts take their real hostname (three machines share this file);
+  # darwin has no meaningful networking.hostName, so it stays literal.
+  host = if isDarwin then "chris-macbook" else osConfig.networking.hostName;
   os   = if isDarwin then "osx" else "linux";
   home = config.home.homeDirectory;
   src  = "${home}/.claude/";

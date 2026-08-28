@@ -1,4 +1,4 @@
-# NixOS entry point for chris-laptop. Now a flake (see flake.nix); home-manager,
+# NixOS entry point for chris-msi. Now a flake (see flake.nix); home-manager,
 # disko, impermanence, lanzaboote and sops-nix come in as flake inputs/modules,
 # not via fetchTarball. The disk layout lives in disko-config.nix.
 { config, lib, pkgs, inputs, ... }:
@@ -55,7 +55,7 @@
     registrations.aarch64-linux.fixBinary = true;
   };
 
-  networking.hostName = "chris-laptop";
+  networking.hostName = "chris-msi";
   # NetworkManager pulls in ModemManager, which probes any USB-serial adapter
   # with AT commands the instant it appears — colliding with UART console
   # sessions (tio/minicom) and producing dropped keystrokes + high-bit garbage.
