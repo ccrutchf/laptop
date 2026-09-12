@@ -18,7 +18,7 @@ in
 {
   # Cross-platform helpers shared by both hosts (claude-backup picks systemd vs
   # launchd internally based on the platform).
-  imports = [ ./claude-backup.nix ];
+  imports = [ ./claude-backup.nix ./git-sync.nix ];
 
   home.username = "chris";
 
@@ -92,9 +92,13 @@ in
   # check is a harmless false positive here. It otherwise prints on every shell
   # start (including every non-interactive shell), so silence it.
   home.sessionVariables._ZO_DOCTOR = "0";
+  # fzf is here for Ctrl-T / Alt-C and its **-completions, not history: atuin owns
+  # Ctrl-R (above). Both integrations bind it and home-manager now warns about the
+  # collision, so drop fzf's history widget explicitly.
   programs.fzf = {
     enable = true;
     enableZshIntegration = true;
+    historyWidget.command = "";
   };
 
   # Cross-platform CLIs (per the rebuild decision: these come from Nix on both

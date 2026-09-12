@@ -34,8 +34,17 @@ home/
   linux.nix                       Linux/desktop home (GNOME/flatpak/dconf/GTK/darkman) + Linux depend hook
   darwin.nix                      macOS home + the macOS depend hook
   claude-backup.nix               hourly ~/.claude snapshot to Nextcloud (systemd timer / launchd agent)
+  git-sync.nix                    automatic git repo sync to the hub — BOTH hosts (see SYNC.md)
+windows/                          the Windows laptop: git-sync.ps1 / git-wip.ps1 / bootstrap.ps1
+server/setup-hub.sh               one-time hub setup on ogre01 (dir + weekly gc timer)
 packages.yaml                     non-Nix packages, per-platform blocks, reconciled by depend
 ```
+
+**Three hosts, two of them Nix.** A third laptop runs **native Windows** and is
+NOT nix-managed — `windows/` is its whole story, bootstrapped by hand. Anything
+that must hold on all three machines (git settings, the sync protocol) is
+therefore implemented twice: once in `home/git-sync.nix` and once in PowerShell.
+Change one, change the other.
 
 **Wiring.** `flake.nix` passes all inputs down via `specialArgs`. Each host's home is wired there: NixOS → `home/linux.nix`, darwin → `home/darwin.nix`; both import `home/common.nix`. `system.stateVersion` (per-host module) and `home.stateVersion` (`home/common.nix`) must generally not change.
 
@@ -78,6 +87,29 @@ A top-level map of named blocks. Each has filter keys (`platform`, `architecture
 - `backups.nix` — restic → Nextcloud over rclone WebDAV (`~/Repos`). **Gated** on the sops secrets (`my.backups.enable`).
 
 The desktop is **GNOME on Wayland** via **GDM** (`services.desktopManager.gnome` + `services.displayManager.gdm` in the host module). GNOME owns power management (low-battery warnings + auto-suspend), lid handling, gnome-keyring (Secret Service), and accessibility (Large Text + fractional scaling in Settings). Desktop tweaks are home-manager: `home/linux.nix` sets dconf (extensions, dash-to-dock, fractional scaling, fonts), GTK, and **darkman** for sunrise/sunset light↔dark. *(The repo previously ran a Hyprland-only session with a greetd/ReGreet greeter; that was removed in favor of GNOME — see git history if resurrecting any of it.)*
+
+## Repo sync (`home/git-sync.nix`, `windows/`) — read SYNC.md before changing
+
+All three laptops converge through a bare-repo hub at `ogre01:/mnt/data/srv`, on a
+10-minute timer (systemd user timer / launchd agent / Scheduled Task). Repos are
+adopted automatically; there is no per-repo setup. **`~/Repos` is excluded from
+Nextcloud on purpose** — its non-atomic writes corrupt live `.git` trees.
+
+Invariants the implementations must keep (both of them):
+- The snapshot commit is built through a **throwaway index** (`GIT_INDEX_FILE`) with
+  plumbing (`read-tree`/`add`/`write-tree`/`commit-tree`). `HEAD`, the real index,
+  the stash and the working tree are NEVER touched.
+- Nothing is merged or checked out automatically; fetch only moves
+  remote-tracking refs. `git wip take` is the explicit opt-in.
+- WIP is pushed ONLY to the `hub` remote, never `origin` — a repo whose origin is
+  a public GitHub repo must not leak unfinished work.
+- Only `refs/wip/<host>/*` is force-pushed. Real branches are fast-forward only.
+
+**GOTCHAs.** The ssh `ControlPath` must stay short — `%C` expands to a 64-char hash
+and ssh appends ~17 more, blowing the 104-byte `sun_path` limit; a fixed name is
+used instead. In the PowerShell port every `git` argument list must be passed as an
+explicit array, or PowerShell binds a leading `-p`/`-A` as one of its own
+parameters before git sees it.
 
 Secrets are **sops-nix** (`.sops.yaml`, `secrets/`); the age identity is derived (`ssh-to-age`) from the SSH key synced via Nextcloud, so every personal machine decrypts and a reinstall doesn't lose it. **Disk:** `hosts/chris-laptop/disko-config.nix` is btrfs-on-LUKS, **the 2TB drive ONLY** — Windows lives on a separate, never-referenced NVMe.
 
