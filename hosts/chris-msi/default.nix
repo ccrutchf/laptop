@@ -16,6 +16,7 @@
       ../../modules/nixos/hibernation.nix
       ../../modules/nixos/secure-boot.nix
       ../../modules/nixos/backups.nix
+      ../../modules/nixos/ssh.nix
     ];
 
   # --- local feature toggles (see each module) ---
@@ -24,6 +25,8 @@
   my.hibernation.resumeOffset = 533760;  # /swap/swapfile offset (btrfs inspect-internal map-swapfile); re-derive on reinstall
   my.secureBoot.enable   = false;  # PHASE 2: flip true AFTER `sbctl create-keys` (see module)
   my.backups.enable      = false;  # flip true AFTER the age key + secrets/secrets.yaml exist
+  my.ssh.enable          = true;   # sshd, opened only on the home LAN (see module)
+  my.ssh.homeGatewayMacs = [ "24:5a:4c:12:f9:25" ];  # the home router; re-derive if it is replaced
 
   # LUKS device is created/declared by disko (disko-config.nix). Here we only add
   # the TPM2 auto-unlock opt; the keyslot is enrolled post-install with
