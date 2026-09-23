@@ -95,6 +95,9 @@ linux-flatpaks:
       source: flathub
     org.blender.Blender:
       source: flathub
+    # 3D point cloud & mesh processing (LAS/E57/PLY); Flathub build is upstream's own
+    org.cloudcompare.CloudCompare:
+      source: flathub
     # lightweight raster image editor (Paint.NET-style)
     com.github.PintaProject.Pinta:
       source: flathub
@@ -115,6 +118,9 @@ linux-flatpaks:
       source: flathub
     # N64 emulator — ParaLLEl RDP, gamepad auto-config; successor to simple64
     io.github.gopher64.gopher64:
+      source: flathub
+    # SNES emulator
+    com.snes9x.Snes9x:
       source: flathub
     # Plex media client (the Mac gets the `plex` cask)
     tv.plex.PlexDesktop:
