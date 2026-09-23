@@ -70,4 +70,41 @@
 
   # Bluetooth (controller present). Pinned explicitly so the flake owns it.
   hardware.bluetooth.enable = true;
+
+  # Mission Center (home/linux.nix) ships a `missioncenter-magpie-setup` script that
+  # is a no-op on NixOS: it setcaps a binary in place and writes /etc/udev/rules.d,
+  # both read-only here. Its two real grants, declared instead:
+  #
+  #   1. Per-process network usage. magpie shells out to `nethogs` found on PATH
+  #      (nixpkgs does NOT bake it into magpie's wrapper), and nethogs needs
+  #      capabilities to attribute sockets to other processes. Upstream setcaps the
+  #      binary world-executable; scoped to `wheel` here instead, since cap_sys_ptrace
+  #      + cap_dac_read_search on a binary ANY local user can exec is a broad grant,
+  #      and wheel already implies sudo. /run/wrappers/bin precedes the system profile
+  #      on PATH, so magpie picks the wrapper up.
+  #   2. CPU package power draw, read from /sys/class/powercap/intel-rapl*/energy_uj,
+  #      which is 0400 root. udev can't chmod a sysfs attribute via MODE= (that applies
+  #      to device nodes), so this shells out like upstream's rule — but chgrp wheel +
+  #      g+r rather than upstream's a+r, because world-readable RAPL counters are the
+  #      PLATYPUS side channel (CVE-2020-8694) that made them root-only.
+  #
+  # `sensors-detect` is deliberately NOT run: its job is persisting module loads into
+  # /etc, and every sensor this hardware exposes (coretemp, msi_wmi_platform fans,
+  # jc42 DIMMs, nvme, iwlwifi) already autoloads. magpie reads hwmon sysfs directly —
+  # it does not link libsensors — so lm-sensors is not a runtime dependency.
+  security.wrappers.nethogs = {
+    source = "${pkgs.nethogs}/bin/nethogs";
+    owner = "root";
+    group = "wheel";
+    permissions = "u+rx,g+x";
+    capabilities = "cap_net_admin,cap_net_raw,cap_dac_read_search,cap_sys_ptrace+pe";
+  };
+
+  # `intel-rapl*:*`, not upstream's `intel-rapl*`: the bare parents (intel-rapl,
+  # intel-rapl-mmio) are containers with no energy_uj, so the wider glob makes both
+  # RUN commands fail and log on every powercap event. The `:`-suffixed zones
+  # (intel-rapl:0, :0:0, intel-rapl-mmio:0) are the ones that carry the counter.
+  services.udev.extraRules = ''
+    SUBSYSTEM=="powercap", KERNEL=="intel-rapl*:*", RUN+="${pkgs.coreutils}/bin/chgrp wheel /sys/%p/energy_uj", RUN+="${pkgs.coreutils}/bin/chmod g+r /sys/%p/energy_uj"
+  '';
 }

@@ -41,6 +41,13 @@ in
     jetbrains-toolbox  # JetBrains IDE manager; IDEs it installs run via nix-ld
     papers             # GNOME Document Viewer (ex-Evince) — PDF reader
 
+    # System monitor (CPU/GPU/RAM/disk/net). From Nix, NOT Flathub: the Flatpak runs
+    # its `magpie` gatherer on the HOST via flatpak-spawn, where the glibc build cannot
+    # find libgbm.so.1 and the musl fallback has no loader — it dies with "Failed to
+    # connect to Gatherer socket". The Nix build links its gatherer natively. The Intel
+    # iGPU tab stays blank (i915 PMU needs kernel.perf_event_paranoid < 2); NVIDIA is fine.
+    mission-center
+
     file-roller        # GNOME archive manager: right-click Compress/Extract in Files
     unzip              # CLI zip extraction (unzip, zipinfo)
     zip                # CLI zip creation
