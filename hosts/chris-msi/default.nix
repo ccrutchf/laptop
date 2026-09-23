@@ -311,6 +311,13 @@
     sops age ssh-to-age  # edit/inspect sops secrets; derive age key from the SSH key
     nvtopPackages.nvidia # GPU utilization monitor (training/inference)
     tio               # serial terminal for UART console work (junkyard etc.)
+    # VeraCrypt (GUI + CLI). A system package, not a flatpak/home one: mounting a
+    # volume re-execs the binary under sudo (nixpkgs patches its binary search to
+    # look in /run/wrappers/bin and /run/current-system/sw/bin) and mounts through
+    # the setuid fusermount3 wrapper — both of which the flatpak sandbox blocks.
+    # Unfree (TrueCrypt License 3.0 AND Apache-2.0); allowUnfree is already set in
+    # modules/nixos/common.nix.
+    veracrypt
     alvr              # SteamVR->Quest streaming, fallback VR path (opens its own LAN ports at runtime)
   ]);
 
