@@ -128,6 +128,9 @@ in {
         "/var/lib/fwupd"       # firmware update state.
         "/var/lib/sbctl"       # Secure Boot keys (lanzaboote pkiBundle).
         "/var/lib/flatpak"     # system-wide flatpak installs (if depend uses them).
+        { directory = "/var/lib/gnome-remote-desktop";  # RDP TLS cert: a new one
+          # every boot means a new fingerprint, i.e. a new warning in every client.
+          user = "gnome-remote-desktop"; group = "gnome-remote-desktop"; mode = "0700"; }
         "/etc/NetworkManager/system-connections"  # saved Wi-Fi + the UCSD VPN.
         # NOTE: /var/lib/docker and /var/log are their OWN durable subvolumes,
         # NOT persist binds — intentionally absent.

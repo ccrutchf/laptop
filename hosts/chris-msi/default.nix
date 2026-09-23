@@ -17,6 +17,7 @@
       ../../modules/nixos/secure-boot.nix
       ../../modules/nixos/backups.nix
       ../../modules/nixos/ssh.nix
+      ../../modules/nixos/remote-desktop.nix
     ];
 
   # --- local feature toggles (see each module) ---
@@ -27,6 +28,7 @@
   my.backups.enable      = false;  # flip true AFTER the age key + secrets/secrets.yaml exist
   my.ssh.enable          = true;   # sshd, opened only on the home LAN (see module)
   my.ssh.homeGatewayMacs = [ "24:5a:4c:12:f9:25" ];  # the home router; re-derive if it is replaced
+  my.remoteDesktop.enable = true;  # RDP remote LOGIN via GDM handover; no firewall hole (see module)
 
   # LUKS device is created/declared by disko (disko-config.nix). Here we only add
   # the TPM2 auto-unlock opt; the keyslot is enrolled post-install with
