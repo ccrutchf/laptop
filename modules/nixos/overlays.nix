@@ -5,12 +5,13 @@
 { config, lib, pkgs, inputs, ... }:
 
 {
-  # Workaround: pipx 1.8.0's test suite fails on this nixpkgs pin — cosmetic
-  # package-spec normalization drift (`pkg@url` vs `pkg @ url`) in
-  # test_package_specifier.py, not a functional break — which otherwise fails the
-  # whole build. `depend` needs the pipx binary (packages.yaml data-tools block), so
-  # skip its checkPhase rather than dropping it. Remove once nixpkgs ships a fixed
-  # pipx — or migrate that block to `uv tool` (uv is already installed).
+  # Workaround: pipx's test suite fails on this nixpkgs pin — currently a
+  # @parametrize/pytest mismatch in tests/test_inject.py under python3.14 (earlier
+  # it was cosmetic package-spec normalization drift in test_package_specifier.py);
+  # neither is a functional break, but either fails the whole build. `depend` needs
+  # the pipx binary (packages.yaml data-tools block), so skip its checkPhase rather
+  # than dropping it. The darwin host carries the same overlay. Remove once nixpkgs
+  # ships a fixed pipx — or migrate that block to `uv tool` (uv is already installed).
   nixpkgs.overlays = [
     (final: prev: {
       pipx = prev.pipx.overridePythonAttrs (old: { doCheck = false; });

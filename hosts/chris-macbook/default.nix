@@ -17,6 +17,20 @@
 {
   nixpkgs.config.allowUnfree = true;
 
+  # Workaround: pipx's test suite fails on this nixpkgs pin — on python3.14,
+  # tests/test_inject.py's @parametrize passes a version string where pytest now
+  # expects a sequence, so collection errors out (165 tests still pass; nothing
+  # functional is broken). That failure sinks the whole darwin-system build, and
+  # `depend` needs the pipx binary on the activation PATH for the data-tools block
+  # in packages.yaml, so skip its checkPhase rather than dropping it. The NixOS
+  # hosts carry the same overlay (modules/nixos/overlays.nix). Remove once nixpkgs ships a fixed pipx — or
+  # migrate that block to `uv tool` (uv is already installed).
+  nixpkgs.overlays = [
+    (final: prev: {
+      pipx = prev.pipx.overridePythonAttrs (old: { doCheck = false; });
+    })
+  ];
+
   # Nix was installed with the official upstream multi-user installer (not
   # Determinate), so nix-darwin manages the Nix installation and daemon. Because
   # the upstream installer's /etc/nix/nix.conf does NOT enable flakes, we must turn
