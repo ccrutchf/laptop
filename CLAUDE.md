@@ -50,10 +50,10 @@ packages.yaml                     non-Nix packages, per-platform blocks, reconci
 
 1. **System packages** → `environment.systemPackages` in `hosts/chris-msi/default.nix` (NixOS) — CLIs, drivers, system tools.
 2. **Cross-platform user CLIs** → `home.packages` in `home/common.nix` (shared by both hosts: `gh`, `claude-code`, `uv`, `depend`).
-3. **Host-specific GUI/desktop** → `home.packages` in `home/linux.nix` (vscode, android-studio, keepass, GNOME bits) or `home/darwin.nix` (currently minimal).
+3. **Host-specific GUI/desktop** → `home.packages` in `home/linux.nix` (vscode, android-studio, keepass, GNOME bits) or `home/darwin.nix` (the Synology FileStation GUI, plus the `.app` bundle assembled for it).
 4. **Non-Nix packages** → `packages.yaml`, reconciled by `depend`. On Linux: Flatpaks, VSCode/browser extensions, pipx (blocks scoped `platform: linux`). On macOS: Homebrew `brew`/`cask` + Mac App Store `mas` (the `platform: osx` block).
 
-**GUI app defaults.** Linux: Flatpak by default (sandboxing + vendor-fresh), `home.packages` only when open-source and Nix-integrated (vscode, android-studio, keepass). macOS: Homebrew casks via `packages.yaml` — **not** nix-darwin's `homebrew` module (see below).
+**GUI app defaults.** Linux: Flatpak by default (sandboxing + vendor-fresh), `home.packages` only when open-source and Nix-integrated (vscode, android-studio, keepass). macOS: Homebrew casks via `packages.yaml` — **not** nix-darwin's `homebrew` module (see below). One exception: E4E's Synology FileStation GUI comes from the same flake input the NixOS host uses (open-source, Nix-packaged for darwin, and no cask exists). Its darwin output is a bare executable — the flake gates the desktop entry and icon to Linux because upstream expects its `.pkg` to supply `SynologyFuse.app` — so `home/darwin.nix` assembles the bundle from upstream's own `Info.plist` and icon. Without one, nothing reaches Spotlight, Launchpad or the Dock. macOS needs no FUSE wiring for it: the CLI serves WebDAV on loopback and hands it to Apple's `mount_webdav`.
 
 ## The `depend` activation hook (critical gotcha)
 
