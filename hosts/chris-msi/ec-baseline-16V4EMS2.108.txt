@@ -1,0 +1,87 @@
+chris-msi — stock embedded-controller baseline
+==============================================
+
+EC firmware 16V4EMS2.108 (built 07/04/2023), board MS-16V4, BIOS E16V4IMS.319.
+Captured 2026-09-06 under sustained load: CPU package 94 C, GPU 79 C, shift_mode
+comfort, fan_mode auto, cooler_boost off, fans 3582/4210/4173 rpm.
+
+WHY THIS FILE EXISTS
+--------------------
+This is the factory fan curve, recorded before anything was allowed to write to
+the EC. If a curve edit ever goes wrong (MControlCenter, or a future ec_sys
+experiment), this is what "stock" looked like, byte for byte.
+
+It also documents the evidence behind the `options msi_ec firmware=16V4EMS1.116`
+override in default.nix. This EC reports 16V4EMS2.108, which upstream msi-ec
+does not whitelist; the override forces the GS66 Stealth 11UE profile
+(CONF_G2_2). The dump below is what justified that: address 0x68 read 0x5e (94)
+while coretemp independently reported 96 C, and 0x80 read 0x4f (79) while
+nvidia-smi independently reported 79 C. Two guessed addresses agreeing with two
+unrelated sensors is not coincidence. 0xd2=c1 (comfort) and 0xd4=0d (auto) are
+both legal enum values for that profile as well.
+
+DUMP
+----
+|      | _0 _1 _2 _3 _4 _5 _6 _7 _8 _9 _a _b _c _d _e _f
+|------+------------------------------------------------
+| 0x0_ | 00 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+| 0x1_ | 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+| 0x2_ | 00 00 00 00 00 00 00 00 0a 05 00 00 00 04 0b 0b
+| 0x3_ | 01 09 00 0d 03 00 50 81 6a 18 60 3b 71 02 e0 00
+| 0x4_ | 00 00 62 00 6b 0f 00 00 0d 0f d1 3e 2d 0c 00 00
+| 0x5_ | 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+| 0x6_ | 00 00 00 00 00 00 00 00 5e 00 37 3c 41 46 5a 5f
+| 0x7_ | 64 64 2d 32 3c 41 50 55 64 00 08 03 05 05 05 03
+| 0x8_ | 4f 00 32 3c 46 52 5a 5d 64 46 00 2d 3c 46 50 55
+| 0x9_ | 64 00 03 05 05 06 03 03 02 0f 78 02 0f 78 61 00
+| 0xa_ | 31 36 56 34 45 4d 53 32 2e 31 30 38 30 37 30 34
+| 0xb_ | 32 30 32 33 31 35 3a 30 36 3a 34 37 00 00 00 28
+| 0xc_ | 00 00 07 33 00 00 00 00 00 86 00 72 00 73 00 00
+| 0xd_ | 00 00 c1 83 0d 00 05 80 00 01 00 00 00 00 00 00
+| 0xe_ | e2 00 00 6b 0f 00 00 42 00 00 00 00 00 c3 00 00
+| 0xf_ | 00 00 70 00 4f 64 00 00 64 00 03 c0 00 04 03 00
+
+(0xa0-0xab is the firmware version as ASCII: "16V4EMS2.108", then the build
+date "07042023" and time "15:06:47".)
+
+STOCK FAN CURVES
+----------------
+Laid out the way MControlCenter addresses them (src/operate.cpp), 7 points each:
+
+  CPU  temps  0x6a-0x70 =  55  60  65  70  90  95  100  C
+       speeds 0x72-0x78 =  45  50  60  65  80  85  100  %
+
+  GPU  temps  0x82-0x88 =  50  60  70  82  90  93  100  C
+       speeds 0x8a-0x90 =   0  45  60  70  80  85  100  %
+
+Note the plateau in the CPU curve: 70 C asks for 65%, and then nothing more
+happens until 90 C. That gap is why this machine sits in the high 80s/low 90s
+under sustained load before the fans really commit. Editing it requires
+`ec_sys write_support=1`, which is deliberately NOT enabled — see default.nix.
+
+OTHER ADDRESSES OF INTEREST
+---------------------------
+  0x68  CPU realtime temperature        0x80  GPU realtime temperature
+  0x71  CPU realtime fan speed %        0x89  GPU realtime fan speed %
+  0x98  cooler_boost (bit 7)            0xd2  shift_mode  c1/c2/c4 = comfort/eco/turbo
+  0xd4  fan_mode  0d/1d/8d = auto/silent/advanced
+  0xd7  battery charge threshold — the one value MSI persists in EC NVRAM,
+        i.e. a bad write here survives a reboot
+  0xe8  Fn <-> Super swap               0xeb  super_battery
+
+The realtime fan-speed percentages are relative to the ACTIVE shift_mode's
+table, not absolute: 100% in comfort is ~4200 rpm, 100% in turbo is ~8100 rpm.
+
+HOW TO RE-CAPTURE
+-----------------
+msi-ec's debug attributes expose the EC read-only, and load even when the
+firmware is not whitelisted:
+
+  sudo rmmod msi_ec
+  sudo modprobe msi_ec debug=1
+  cat /sys/devices/platform/msi-ec/debug/fw_version
+  cat /sys/devices/platform/msi-ec/debug/ec_dump
+  sudo rmmod msi_ec && sudo modprobe msi_ec   # back to the configured profile
+
+Re-capture before any curve edit; this file is a 2026-09-06 snapshot and a BIOS
+or EC update can move things.

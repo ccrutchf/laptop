@@ -40,9 +40,45 @@
 
   # Disable HDA audio power-saving: the SOF codec/controller suspending on idle
   # clips the onset of playback (first syllable dropped when audio resumes).
+  #
+  # msi_ec: this machine's EC reports 16V4EMS2.108, which upstream msi-ec does not
+  # whitelist, so the module refuses to load without an override. The board (MS-16V4)
+  # is the GS66 Stealth 11UE's, whose EMS1 firmware maps to CONF_G2_2 — hence forcing
+  # that profile. Verified against the live EC in debug mode BEFORE writing to it:
+  # 0x68 read 94 while coretemp independently said 96, 0x80 read 79 while nvidia-smi
+  # independently said 79, and 0xd2=c1 (comfort) / 0xd4=0d (auto) are both legal enum
+  # values for the profile. Every other EMS1/EMS2 sibling pair in the driver (16R4,
+  # 1585, 16W1, 17L5, 15M1) shares one config, i.e. EMS2 is a board revision and not
+  # a different EC layout. Re-check this if msi-ec is ever updated to know EMS2.
+  # The dump behind that reasoning, plus the stock fan curves and how to re-capture
+  # them, is in ./ec-baseline-16V4EMS2.108.txt.
   boot.extraModprobeConfig = ''
     options snd_hda_intel power_save=0 power_save_controller=N
+    options msi_ec firmware=16V4EMS1.116
   '';
+
+  # MSI EC fan/thermal control, exposed at /sys/devices/platform/msi-ec/:
+  #   shift_mode    eco|comfort|turbo    raises the whole fan ceiling
+  #   cooler_boost  on|off               pins fans to the top of the current table
+  #   fan_mode      auto|silent|advanced
+  # realtime_fan_speed is a percentage of the ACTIVE shift_mode's table, not an
+  # absolute: "100%" in comfort is ~4200 rpm, in turbo ~8100 rpm. Under a pinned
+  # 80W GPU load, turbo+boost took the fans 3582/4210/4173 -> 8135/6956/7058 rpm,
+  # dropped the GPU 79 -> 69 C and cleared its HW thermal slowdown entirely.
+  # Nothing is forced at boot on purpose: comfort/auto is the right default and
+  # turbo is loud. Flip it by hand when a GPU job is cooking the machine.
+  boot.extraModulePackages = [ config.boot.kernelPackages.msi-ec ];
+  boot.kernelModules = [ "msi_ec" ];
+
+  # `fan-turbo` / `fan-auto` / `fan-status` — the only fan UI worth having here.
+  # MControlCenter (nixpkgs `mcontrolcenter`) was tried and dropped: without
+  # `ec_sys write_support=1` it cannot edit the fan curves, which is the only
+  # thing it offered over these three lines, and we deliberately do not enable
+  # ec_sys (see ./ec-baseline-16V4EMS2.108.txt).
+  #
+  # No sudo: the udev rule further down hands the three msi-ec attributes to the
+  # wheel group. That grants wheel nothing it could not already get via sudo, and
+  # touches only msi-ec's curated attributes -- never the raw EC.
 
   # Transparent aarch64 emulation via qemu-user + binfmt_misc — required to run
   # arm64 Debian inside systemd-nspawn for the felix/kleaf rootfs build (the
@@ -97,9 +133,15 @@
   # Second rule: give the logged-in user access to Qualcomm boards in EDL/9008
   # mode (05c6:9008) so `qdl` can flash them without root. Rubik Pi 3 enumerates
   # here once switched into Emergency Download mode.
+  # Third rule: let wheel drive the msi-ec fan knobs without sudo, so `fan-turbo`
+  # and `fan-auto` are plain commands. MODE=/GROUP= do not apply to a platform
+  # device's attribute files, so chgrp/chmod them directly — the same idiom the
+  # intel-rapl energy_uj rule uses. Only these three curated attributes are opened
+  # up; the raw EC is untouched, and wheel could already reach them via sudo.
   services.udev.extraRules = ''
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x9a21", ATTR{power/control}="on"
     SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9008", MODE="0660", TAG+="uaccess"
+    ACTION=="add|change", SUBSYSTEM=="platform", KERNEL=="msi-ec", RUN+="${pkgs.coreutils}/bin/chgrp wheel /sys/%p/shift_mode /sys/%p/fan_mode /sys/%p/cooler_boost", RUN+="${pkgs.coreutils}/bin/chmod g+w /sys/%p/shift_mode /sys/%p/fan_mode /sys/%p/cooler_boost"
   '';
 
   # NVIDIA RTX 3060 Mobile (Ampere) + Intel Tiger Lake iGPU. PRIME render offload:
@@ -225,6 +267,41 @@
     cudatoolkit       # nvcc + CUDA libraries on PATH
     pciutils          # lspci
     ddcutil           # monitor DDC/CI control (see monitor-audio-full-scale)
+    # Fan control (msi-ec). See the msi_ec block near the top of this file.
+    (writeShellScriptBin "fan-turbo" ''
+      set -eu
+      EC=/sys/devices/platform/msi-ec
+      [ -d "$EC" ] || { echo "fan-turbo: msi-ec not loaded" >&2; exit 1; }
+      echo turbo > "$EC/shift_mode"
+      echo on    > "$EC/cooler_boost"
+      echo "fans: turbo + cooler boost"
+    '')
+    (writeShellScriptBin "fan-auto" ''
+      set -eu
+      EC=/sys/devices/platform/msi-ec
+      [ -d "$EC" ] || { echo "fan-auto: msi-ec not loaded" >&2; exit 1; }
+      echo off     > "$EC/cooler_boost"
+      echo comfort > "$EC/shift_mode"
+      echo auto    > "$EC/fan_mode"
+      echo "fans: stock (comfort + auto)"
+    '')
+    (writeShellScriptBin "fan-status" ''
+      set -eu
+      EC=/sys/devices/platform/msi-ec
+      [ -d "$EC" ] || { echo "fan-status: msi-ec not loaded" >&2; exit 1; }
+      printf 'shift_mode   %s\n' "$(cat "$EC/shift_mode")"
+      printf 'fan_mode     %s\n' "$(cat "$EC/fan_mode")"
+      printf 'cooler_boost %s\n' "$(cat "$EC/cooler_boost")"
+      printf 'cpu          %s C, fan %s%%\n' \
+        "$(cat "$EC/cpu/realtime_temperature")" "$(cat "$EC/cpu/realtime_fan_speed")"
+      printf 'gpu          %s C, fan %s%%\n' \
+        "$(cat "$EC/gpu/realtime_temperature")" "$(cat "$EC/gpu/realtime_fan_speed")"
+      # Resolve the hwmon by NAME -- hwmonN numbering is not stable across boots.
+      for h in /sys/class/hwmon/hwmon*; do
+        [ "$(cat "$h/name" 2>/dev/null)" = msi_wmi_platform ] || continue
+        printf 'rpm          %s\n' "$(cat "$h"/fan[123]_input | tr '\n' ' ')"
+      done
+    '')
     android-tools     # adb + fastboot
     qdl               # flash Qualcomm boards (Rubik Pi 3) over EDL/9008
     dnsutils          # nslookup, dig, host
