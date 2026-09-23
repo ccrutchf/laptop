@@ -185,6 +185,12 @@ mac-apps:
     "497799835":
       name: Xcode
       dependencies: [mas]
+    # Official WireGuard VPN client. App Store only — there is no `wireguard` cask,
+    # and Homebrew's wireguard-tools/wireguard-go are just the CLIs, without the
+    # macOS network extension the app needs to actually bring a tunnel up.
+    "1451685025":
+      name: WireGuard
+      dependencies: [mas]
 
 # e4e-data-management via pipx (CLI: `origin`). Same tool as the Linux block, the
 # macOS arm64 wheel from the same v0.6.1 release.
