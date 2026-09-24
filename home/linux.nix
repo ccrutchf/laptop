@@ -13,6 +13,107 @@ let
   # integrated terminal. Extensions that fetch native binaries rely on
   # programs.nix-ld (configuration.nix) instead of an FHS layout.
   vscode = pkgs.vscode.override { commandLineArgs = "--no-sandbox"; };
+
+  # Adwaita look for Wine apps in Bottles (e.g. BrickLink Studio): system colors
+  # ("R G B") from the libadwaita palette, the msstyles theme off (it would
+  # override them), dialog fonts mapped to the GNOME UI font, and the DPI below.
+  # Applied to every bottle by the darkman hooks below, so Wine follows light/dark.
+  wineColors = {
+    light = {
+      window = "255 255 255"; bg = "250 250 250"; face = "235 235 235";
+      light = "245 245 245"; hilight = "255 255 255"; shadow = "200 200 200";
+      dkShadow = "160 160 160"; text = "50 50 50"; gray = "150 150 150";
+      dimText = "130 130 130"; link = "28 113 216";
+    };
+    dark = {
+      window = "29 29 32"; bg = "34 34 38"; face = "46 46 50";
+      light = "58 58 62"; hilight = "70 70 74"; shadow = "24 24 26";
+      dkShadow = "20 20 22"; text = "255 255 255"; gray = "128 128 132";
+      dimText = "150 150 154"; link = "120 174 237";
+    };
+  };
+  wineReg = mode: let c = wineColors.${mode}; accent = "53 132 228"; in
+    pkgs.writeText "wine-adwaita-${mode}.reg" ''
+      REGEDIT4
+
+      [HKEY_CURRENT_USER\Control Panel\Colors]
+      "ActiveBorder"="${c.face}"
+      "ActiveTitle"="${c.face}"
+      "AppWorkSpace"="${c.bg}"
+      "Background"="${c.bg}"
+      "ButtonAlternateFace"="${c.face}"
+      "ButtonDkShadow"="${c.dkShadow}"
+      "ButtonFace"="${c.face}"
+      "ButtonHilight"="${c.hilight}"
+      "ButtonLight"="${c.light}"
+      "ButtonShadow"="${c.shadow}"
+      "ButtonText"="${c.text}"
+      "GradientActiveTitle"="${c.face}"
+      "GradientInactiveTitle"="${c.bg}"
+      "GrayText"="${c.gray}"
+      "Hilight"="${accent}"
+      "HilightText"="255 255 255"
+      "HotTrackingColor"="${c.link}"
+      "InactiveBorder"="${c.bg}"
+      "InactiveTitle"="${c.bg}"
+      "InactiveTitleText"="${c.dimText}"
+      "InfoText"="${c.text}"
+      "InfoWindow"="${c.face}"
+      "Menu"="${c.window}"
+      "MenuBar"="${c.bg}"
+      "MenuHilight"="${accent}"
+      "MenuText"="${c.text}"
+      "Scrollbar"="${c.face}"
+      "TitleText"="${c.text}"
+      "Window"="${c.window}"
+      "WindowFrame"="${c.shadow}"
+      "WindowText"="${c.text}"
+
+      [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\ThemeManager]
+      "ThemeActive"="0"
+
+      [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize]
+      "AppsUseLightTheme"=dword:0000000${if mode == "light" then "1" else "0"}
+      "SystemUsesLightTheme"=dword:0000000${if mode == "light" then "1" else "0"}
+
+      [HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\FontSubstitutes]
+      "MS Shell Dlg"="Ubuntu"
+      "MS Shell Dlg 2"="Ubuntu"
+
+      [HKEY_CURRENT_USER\Software\Wine\Fonts\Replacements]
+      "Segoe UI"="Ubuntu"
+
+      [HKEY_CURRENT_USER\Control Panel\Desktop]
+      "LogPixels"=dword:${wineDpiHex}
+
+      [HKEY_CURRENT_USER\Software\Wine\Fonts]
+      "LogPixels"=dword:${wineDpiHex}
+
+      [HKEY_LOCAL_MACHINE\System\CurrentControlSet\Hardware Profiles\Current\Software\Fonts]
+      "LogPixels"=dword:${wineDpiHex}
+    '';
+  # Wine DPI for bottles run through XWayland (Bottles' Wayland mode crashes Studio
+  # and has no title bars on GNOME). With xwayland-native-scaling, mutter renders X11
+  # at the max monitor scale rounded UP (133% → 2×; Xft.dpi = 192), so Wine must
+  # match 96 × that. Assumes a >100% display is attached, which the laptop panel is.
+  wineDpi = 192;
+  wineDpiHex = lib.fixedWidthString 8 "0" (lib.toLower (lib.toHexString wineDpi));
+  # The .reg is copied into the Bottles data dir: the sandbox can't see /nix/store.
+  # Takes effect on each app's next launch.
+  bottlesTheme = mode: ''
+    data="$HOME/.var/app/com.usebottles.bottles/data"
+    [ -d "$data/bottles/bottles" ] || exit 0
+    ${pkgs.coreutils}/bin/install -m644 ${wineReg mode} "$data/wine-adwaita.reg"
+    for dir in "$data"/bottles/bottles/*/; do
+      name=$(${pkgs.gnused}/bin/sed -n 's/^Name: //p' "$dir/bottle.yml")
+      # Keep Bottles' own record in step, so its UI doesn't reapply another DPI.
+      ${pkgs.flatpak}/bin/flatpak run --command=bottles-cli com.usebottles.bottles \
+        edit -b "$name" --params wayland:false,custom_dpi:${toString wineDpi} || true
+      ${pkgs.flatpak}/bin/flatpak run --command=bottles-cli com.usebottles.bottles \
+        run -b "$name" -e "$dir/drive_c/windows/regedit.exe" \
+        /S "Z:''${data//\//\\}\\wine-adwaita.reg" || true
+    done
+  '';
 in
 {
   # Shared cross-platform layer (shell stack, git, core CLIs).
@@ -105,6 +206,14 @@ in
     TZ=America/Los_Angeles
   '';
 
+  # Bottles ships with no home access, so Wine apps (BrickLink Studio) could only
+  # save inside the bottle. Grant ~/Documents (Nextcloud-synced); inside Wine it's
+  # Z:\home\chris\Documents.
+  xdg.dataFile."flatpak/overrides/com.usebottles.bottles".text = ''
+    [Context]
+    filesystems=xdg-documents;
+  '';
+
   # Unified cursor: sets theme + size everywhere at once (GTK + XCURSOR_* for
   # Wayland and X11/XWayland). Adwaita, not Yaru: nixpkgs dropped yaru-theme (it
   # needed gtk-engine-murrine, removed as unmaintained GTK 2), and the GNOME
@@ -130,9 +239,11 @@ in
   };
 
   dconf.settings = {
-    # Fractional scaling (needed for 125% etc.). Takes effect on next login.
+    # Fractional scaling (needed for 125% etc.). xwayland-native-scaling renders X11
+    # apps at native resolution instead of upscaling them blurry; they size
+    # themselves from DPI (Wine bottles: see wineDpi). Takes effect on next login.
     "org/gnome/mutter" = {
-      experimental-features = [ "scale-monitor-framebuffer" ];
+      experimental-features = [ "scale-monitor-framebuffer" "xwayland-native-scaling" ];
     };
 
     # Don't auto-suspend while plugged into AC.
@@ -199,6 +310,8 @@ in
       ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
       ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita-dark'
     '';
+    lightModeScripts.bottles = bottlesTheme "light";
+    darkModeScripts.bottles = bottlesTheme "dark";
   };
 
   # Reconcile non-Nix packages (flatpaks, vscode extensions, pipx) via
