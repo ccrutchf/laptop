@@ -71,8 +71,9 @@
     keep-outputs     = true;
     keep-derivations = true;
     # CUDA binary cache: download CUDA-enabled packages instead of compiling them.
-    extra-substituters       = [ "https://cuda-maintainers.cachix.org" ];
-    extra-trusted-public-keys = [ "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E=" ];
+    # (cuda-maintainers.cachix.org was retired; the CUDA team's cache moved here.)
+    extra-substituters       = [ "https://cache.nixos-cuda.org" ];
+    extra-trusted-public-keys = [ "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M=" ];
   };
 
   nix.gc = {
