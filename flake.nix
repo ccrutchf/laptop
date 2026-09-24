@@ -1,5 +1,5 @@
 {
-  description = "personal machines — chris-msi (NixOS, MSI Creator 15) + chris-lenovo (NixOS, ThinkPad X1 Carbon Gen 9) + chris-macbook (nix-darwin)";
+  description = "personal machines — chris-msi (NixOS, MSI Creator 15) + chris-lenovo (NixOS fallback; ThinkPad X1 Carbon Gen 9, runs ChromeOS Flex with chris@crostini home-manager) + chris-macbook (nix-darwin)";
 
   inputs = {
     # DELIBERATELY UNSTABLE. This is a personal daily driver, not a fleet box
@@ -127,6 +127,19 @@
           home-manager.users.chris = import ./home/darwin.nix;
         }
       ];
+    };
+
+    # The Lenovo runs ChromeOS Flex; this is standalone home-manager for its Linux
+    # container (Crostini), i.e. just the terminal layer. There is no host module, so
+    # unfree (claude-code) is allowed on this pkgs import directly rather than
+    # through nixpkgs.config as the nixos/darwin hosts do.
+    homeConfigurations."chris@crostini" = home-manager.lib.homeManagerConfiguration {
+      pkgs = import nixpkgs {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+      };
+      extraSpecialArgs = { inherit inputs; };
+      modules = [ ./home/crostini.nix ];
     };
   };
 }

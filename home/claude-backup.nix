@@ -17,9 +17,14 @@
 { pkgs, lib, config, osConfig ? null, ... }:
 let
   isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
-  # NixOS hosts take their real hostname (three machines share this file);
-  # darwin has no meaningful networking.hostName, so it stays literal.
-  host = if isDarwin then "chris-macbook" else osConfig.networking.hostName;
+  # NixOS hosts take their real hostname (several machines share this file);
+  # darwin has no meaningful networking.hostName, so it stays literal. Standalone
+  # home-manager (Crostini on the Lenovo's ChromeOS Flex) has no osConfig at all,
+  # and the container's own hostname is always "penguin", so it is literal too.
+  host =
+    if isDarwin then "chris-macbook"
+    else if osConfig == null then "chris-crostini"
+    else osConfig.networking.hostName;
   os   = if isDarwin then "osx" else "linux";
   home = config.home.homeDirectory;
   src  = "${home}/.claude/";

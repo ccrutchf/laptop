@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a **multi-host** Nix configuration for three personal machines, in one flake tracking **`nixos-unstable`** (home-manager follows it):
 
 - **`chris-msi`** — NixOS on an MSI Creator 15 A11UE. Declarative disk via **disko**, **impermanent** btrfs root (`@` reset to empty every boot, previous kept as `@old`; durable `/persist`, `/home`, `/nix`, `/var/log`, `/var/lib/docker`), hibernation, Secure Boot.
-- **`chris-lenovo`** — NixOS on a Lenovo ThinkPad X1 Carbon Gen 9 (i7-1185G7, Intel Iris Xe, **no dGPU**). Same impermanent btrfs-on-LUKS layout, but **NixOS-only** — disko wipes the whole 512GB NVMe. Hibernation and Secure Boot are **off** (the swapfile is still sized >= RAM so hibernation can be enabled later without repartitioning).
+- **`chris-lenovo`** — the Lenovo ThinkPad X1 Carbon Gen 9 actually runs **ChromeOS Flex**, shared with Chris's wife. The only Nix on it is standalone home-manager in Chris's Linux container: `homeConfigurations."chris@crostini"` → `home/crostini.nix` (terminal layer only; see `REBUILD-FLEX.md`). The NixOS host is kept as the **fallback**: NixOS on a Lenovo ThinkPad X1 Carbon Gen 9 (i7-1185G7, Intel Iris Xe, **no dGPU**). Same impermanent btrfs-on-LUKS layout, but **NixOS-only** — disko wipes the whole 512GB NVMe. Hibernation and Secure Boot are **off** (the swapfile is still sized >= RAM so hibernation can be enabled later without repartitioning).
 - **`chris-macbook`** — macOS (Apple Silicon MacBook Air) via **nix-darwin**. Nix installed with the **Determinate Systems** installer (it owns the daemon, so `nix.enable = false`); macOS itself is not declaratively installed.
 
 None of them are part of the KastnerRG/krg-infra fleet.
@@ -16,7 +16,7 @@ None of them are part of the KastnerRG/krg-infra fleet.
 - **Apply (macOS):** `darwin-rebuild switch --flake .#chris-macbook`
 - Both run the home-manager activation, which runs `depend install --prune` against `packages.yaml` — converging the non-Nix layer to the manifest on both hosts (see below).
 - **Update inputs:** `nix flake update` (or a single input), then switch.
-- **Validate without activating:** `nixos-rebuild build --flake .#chris-msi`, or `nix build .#darwinConfigurations.chris-macbook.system`, or `nix eval .#nixosConfigurations.chris-msi.config.system.build.toplevel.drvPath` (cheap eval). CI does this for both hosts (`.github/workflows/flake.yml`). Confirm a change builds before switching — and ALWAYS before a disk wipe.
+- **Validate without activating:** `nixos-rebuild build --flake .#chris-msi`, or `nix build .#darwinConfigurations.chris-macbook.system`, or `nix eval .#nixosConfigurations.chris-msi.config.system.build.toplevel.drvPath` (cheap eval). Crostini: `nix eval '.#homeConfigurations."chris@crostini".activationPackage.drvPath'`. CI does this for every host (`.github/workflows/flake.yml`). Confirm a change builds before switching — and ALWAYS before a disk wipe.
 - **Full reinstall:** `REBUILD.md` is the index → `REBUILD-MSI.md` (NixOS, disko wipes the 2TB drive; Windows on the other NVMe is untouched) and `REBUILD-MAC.md` (macOS bootstrap).
 - **Preview non-Nix package changes:** `depend plan --config packages.yaml` (add `--prune` to also preview removals). `nixos-rebuild`/`darwin-rebuild` evaluation is the only validation — there is no separate test suite here.
 
@@ -24,6 +24,7 @@ None of them are part of the KastnerRG/krg-infra fleet.
 
 ```
 flake.nix                         mkNixosHost -> nixosConfigurations.{chris-msi,chris-lenovo} + darwinConfigurations.chris-macbook
+                                  + homeConfigurations."chris@crostini" (standalone HM, Lenovo on Flex)
 hosts/
   chris-msi/default.nix        NixOS host module (imports its disko-config + ../../modules/nixos/*)
   chris-msi/disko-config.nix   declarative disk (btrfs-on-LUKS, the 2TB drive ONLY)
@@ -40,13 +41,14 @@ home/
   common.nix                      cross-platform home-manager (shell stack, git, core CLIs, claude-backup) — BOTH hosts
   linux.nix                       Linux/desktop home (GNOME/flatpak/dconf/GTK/darkman) + Linux depend hook
   darwin.nix                      macOS home + the macOS depend hook
+  crostini.nix                    standalone HM for the Flex Linux container: common.nix + UCSD VPN scripts (not linux.nix)
   claude-backup.nix               hourly ~/.claude snapshot to Nextcloud (systemd timer / launchd agent)
   git-wip.nix                     per-minute git-wip sync (systemd timer / launchd agents) + starship marker
 pkgs/git-wip/                     git-wip: unfinished work follows you between machines (bundles via Nextcloud)
 packages.yaml                     non-Nix packages, per-platform blocks, reconciled by depend
 ```
 
-**Wiring.** `flake.nix` passes all inputs down via `specialArgs`. Each host's home is wired there: NixOS → `home/linux.nix`, darwin → `home/darwin.nix`; both import `home/common.nix`. `system.stateVersion` (per-host module) and `home.stateVersion` (`home/common.nix`) must generally not change.
+**Wiring.** `flake.nix` passes all inputs down via `specialArgs`. Each host's home is wired there: NixOS → `home/linux.nix`, darwin → `home/darwin.nix`, Crostini → `home/crostini.nix` (standalone, so there is no `osConfig`: shared home modules must tolerate `osConfig == null`); all import `home/common.nix`. `system.stateVersion` (per-host module) and `home.stateVersion` (`home/common.nix`) must generally not change.
 
 ## Package management — know the layer AND the platform
 
@@ -129,4 +131,4 @@ General rules for this machine:
 
 ## CI
 
-`.github/workflows/flake.yml` validates both hosts on every push/PR: the NixOS host is evaluated (a full system build is multi-GB — too big for hosted runners), the darwin host is built on a macOS runner. The darwin job requires the `dependency-manager` darwin output to be published + locked here.
+`.github/workflows/flake.yml` validates every host on every push/PR: the NixOS hosts and the `chris@crostini` home config are evaluated (a full system build is multi-GB — too big for hosted runners), the darwin host is built on a macOS runner. The darwin job requires the `dependency-manager` darwin output to be published + locked here.

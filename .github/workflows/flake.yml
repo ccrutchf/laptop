@@ -26,6 +26,15 @@ jobs:
       - name: Evaluate the system closure
         run: nix eval .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel.drvPath --raw
 
+  crostini:
+    name: eval chris@crostini (home-manager, x86_64-linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Evaluate the home-manager activation package
+        run: nix eval '.#homeConfigurations."chris@crostini".activationPackage.drvPath' --raw
+
   darwin:
     name: build chris-macbook (aarch64-darwin)
     runs-on: macos-latest
