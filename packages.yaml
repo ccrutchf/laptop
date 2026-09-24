@@ -127,6 +127,10 @@ linux-flatpaks:
       source: flathub
     org.videolan.VLC:
       source: flathub
+    # Wine prefix manager — hosts BrickLink Studio (LEGO CAD; Windows/macOS only,
+    # no Linux build). The Studio installer is run inside a bottle by hand.
+    com.usebottles.bottles:
+      source: flathub
 
 # e4e-data-management via pipx (CLI: `origin`). Linux x86_64 wheel from the v0.6.1
 # release; not on PyPI. pipx comes from Nix on the activation PATH.
@@ -179,6 +183,9 @@ mac-apps:
     jetbrains-toolbox:
     # Media player (Linux uses the org.videolan.VLC flatpak).
     vlc:
+    # BrickLink Studio, LEGO's official CAD / instructions app (Linux runs the
+    # Windows build under Bottles).
+    bricklink-studio:
   mas:
     # Mac App Store apps, keyed by numeric id (find via `mas search <name>`).
     # Xcode is App Store only — not a Homebrew cask.
