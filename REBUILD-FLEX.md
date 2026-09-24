@@ -71,16 +71,24 @@ The NixOS config for this machine (`hosts/chris-lenovo/`,
       ```
       From then on, `home-manager switch --flake '.#chris@crostini'`. Update after the
       MSI has lived on the same `flake.lock` for a while, so the MSI finds any breakage first.
+      Each switch also runs `depend install --prune --tag crostini` against
+      `packages.yaml`: it apt-installs `flatpak`, adds Flathub, and installs the
+      untagged Linux Flathub apps (Zen, Nextcloud). To add or remove an app here, edit
+      `packages.yaml`, not this machine. Preview with `depend plan --prune`
+      (`DEPEND_TAGS=crostini` is set for you).
 - [ ] **zsh as login shell:**
       ```sh
       command -v zsh | sudo tee -a /etc/shells
       sudo chsh -s "$(command -v zsh)" chris
       ```
       Then restart the container (right-click *Terminal* → *Shut down Linux*).
-- [ ] **claude-backup** writes hourly snapshots to
-      `~/Documents/ClaudeBackup/chris-crostini/linux/`. Nothing syncs that folder to
-      Nextcloud unless a Nextcloud client runs in the container. Until then the
-      snapshots are local only, which does no harm.
+- [ ] **Nextcloud** (installed by the switch above). Start it from the launcher
+      (restart Linux first if it isn't listed), sign in, and use **selective sync**.
+      Never sync the whole account into a ~40GB container. At minimum include
+      `Documents/ClaudeBackup` and `Documents/GitWip`, which claude-backup and git-wip
+      write into. Synced files show up in ChromeOS Files under **Linux files**.
+      It only syncs while it's running, and Crostini doesn't autostart GUI apps, so
+      open it at the start of a session.
 
 ## 5. UCSD VPN
 Two commands from `home/crostini.nix`. Try the first; fall back to the second:
@@ -96,12 +104,8 @@ it unless its proxy is pointed at `localhost:1080`, and that only works if
 ChromeOS forwards the port (untested).
 
 ## 6. Zen (Flatpak, inside the container)
-- [ ] ```sh
-      sudo apt install -y flatpak
-      flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-      flatpak install --user -y flathub app.zen_browser.zen
-      ```
-      If it doesn't show up in the ChromeOS launcher, restart Linux.
+- [ ] Already installed by the home-manager switch (step 4). If it doesn't show up
+      in the ChromeOS launcher, restart Linux.
 - [ ] Sign into the Mozilla account for sync.
 - [ ] Set Zen's download folder to `/mnt/chromeos/MyFiles/Downloads`. It needs the
       *Share with Linux* from step 3; otherwise downloads land where ChromeOS can't see them.

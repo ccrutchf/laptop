@@ -124,6 +124,9 @@ in
   # Lets `depend` (run from the activation hook and ad-hoc) resolve which flake+attr
   # to operate against without passing --flake every time.
   home.sessionVariables.DEPEND_NIXOS_FLAKE = "${config.home.homeDirectory}/Repos/personal/laptop#${osConfig.networking.hostName}";
+  # This machine's tag in packages.yaml, for ad-hoc `depend plan`/`prune`. The
+  # activation hook below passes `--tag` itself: it doesn't see session variables.
+  home.sessionVariables.DEPEND_TAGS = "desktop";
 
   # Linux/desktop packages (the portable CLIs gh/claude-code/uv/depend are in
   # home-common.nix). pipx is Linux-only here (the data-tools block in packages.yaml).
@@ -319,10 +322,11 @@ in
   # this has a stripped PATH, so explicitly add the provider binaries depend shells
   # out to. --prune CONVERGES (same as the Mac): flatpak/vscode/pipx packages not in
   # packages.yaml are removed; the safety rail leaves a provider untouched if it
-  # declares nothing on this platform.
+  # declares nothing on this platform. `--tag desktop` selects the NixOS blocks;
+  # depend refuses to prune untagged while `tags:` blocks apply to Linux.
   home.activation.dependencyManagerInstall =
     lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       export PATH="${lib.makeBinPath [ pkgs.flatpak vscode pkgs.pipx ]}:$PATH"
-      $DRY_RUN_CMD ${depend}/bin/depend install --prune --config ${../packages.yaml}
+      $DRY_RUN_CMD ${depend}/bin/depend install --prune --tag desktop --config ${../packages.yaml}
     '';
 }

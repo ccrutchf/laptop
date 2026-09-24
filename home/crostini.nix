@@ -5,13 +5,14 @@
 # (see REBUILD-FLEX.md).
 #
 # Deliberately NOT ./linux.nix: that is the NixOS/GNOME layer (dconf, GTK,
-# darkman) plus the `depend` hook, which would try to converge every
-# `platform: linux` block of packages.yaml inside the container. GUI apps here
-# (Zen) are a manual Flatpak install. Nix-built GUI apps need nixGL on a non-NixOS
-# host, and Flatpak brings its own graphics stack.
+# darkman). GUI apps here (Zen, Nextcloud) are Flatpaks from packages.yaml, selected
+# by `--tag crostini` in the depend hook below. Nix-built GUI apps need nixGL on a
+# non-NixOS host, and Flatpak brings its own graphics stack.
 { config, lib, pkgs, inputs, ... }:
 
 let
+  depend = inputs.dependency-manager.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
   # UCSD VPN (AnyConnect protocol; the same endpoint the NixOS hosts reach through
   # the NetworkManager openconnect plugin). Two ways in, because it is not yet known
   # whether this container gets a working /dev/net/tun:
@@ -57,4 +58,19 @@ in
     ucsd-vpn
     ucsd-vpn-socks
   ];
+
+  # This machine's tag in packages.yaml, for ad-hoc `depend plan`/`prune`.
+  home.sessionVariables.DEPEND_TAGS = "crostini";
+
+  # Reconcile packages.yaml on every switch, as the other hosts do: `apt: flatpak`
+  # first, then the shared Flathub apps; everything else is tagged `desktop`. Here the
+  # providers are Debian's, not Nix's, so the stripped activation PATH gets /usr/bin
+  # (flatpak, sudo; depend finds apt-get by absolute path). Crostini's default user
+  # has passwordless sudo, so the apt step doesn't prompt. --prune only touches
+  # flatpak here: apt is never pruned.
+  home.activation.dependencyManagerInstall =
+    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      export PATH="$PATH:/usr/bin:/usr/sbin:/bin"
+      $DRY_RUN_CMD ${depend}/bin/depend install --prune --tag crostini --config ${../packages.yaml}
+    '';
 }

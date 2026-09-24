@@ -18,7 +18,7 @@ None of them are part of the KastnerRG/krg-infra fleet.
 - **Update inputs:** `nix flake update` (or a single input), then switch.
 - **Validate without activating:** `nixos-rebuild build --flake .#chris-msi`, or `nix build .#darwinConfigurations.chris-macbook.system`, or `nix eval .#nixosConfigurations.chris-msi.config.system.build.toplevel.drvPath` (cheap eval). Crostini: `nix eval '.#homeConfigurations."chris@crostini".activationPackage.drvPath'`. CI does this for every host (`.github/workflows/flake.yml`). Confirm a change builds before switching — and ALWAYS before a disk wipe.
 - **Full reinstall:** `REBUILD.md` is the index → `REBUILD-MSI.md` (NixOS, disko wipes the 2TB drive; Windows on the other NVMe is untouched) and `REBUILD-MAC.md` (macOS bootstrap).
-- **Preview non-Nix package changes:** `depend plan --config packages.yaml` (add `--prune` to also preview removals). `nixos-rebuild`/`darwin-rebuild` evaluation is the only validation — there is no separate test suite here.
+- **Preview non-Nix package changes:** `depend plan --config packages.yaml` (add `--prune` to also preview removals; on Linux `DEPEND_TAGS` selects this machine's blocks). `nixos-rebuild`/`darwin-rebuild` evaluation is the only validation — there is no separate test suite here.
 
 ## Repository layout
 
@@ -63,9 +63,12 @@ packages.yaml                     non-Nix packages, per-platform blocks, reconci
 
 Both home configs pull the `depend` binary from the `dependency-manager` flake input (it is cross-platform now — the flake exposes `aarch64-darwin`) and run it from a `home.activation` hook on every switch. That hook runs with a **stripped PATH**, so every provider binary `depend` shells out to must be on the activation `PATH`:
 
-Both hosts run `depend install --prune` (converge — remove installed-but-undeclared packages to match `packages.yaml`); they differ only in the providers and the `PATH`:
-- **Linux** (`home/linux.nix`): prunes flatpak/vscode/pipx; `PATH` via `lib.makeBinPath [ pkgs.flatpak vscode pkgs.pipx ]`.
-- **macOS** (`home/darwin.nix`): prunes brew/cask/mas; `PATH` prepends `/opt/homebrew/bin` (where `brew`/`mas` live). Homebrew is a prerequisite — depend shells out to `brew`, it does not build it.
+Every host runs `depend install --prune` (converge — remove installed-but-undeclared packages to match `packages.yaml`); they differ in the providers, the `PATH` and the **machine tag**:
+- **NixOS** (`home/linux.nix`): `--tag desktop`; prunes flatpak/vscode/pipx; `PATH` via `lib.makeBinPath [ pkgs.flatpak vscode pkgs.pipx ]`.
+- **Crostini** (`home/crostini.nix`): `--tag crostini`; installs `apt: flatpak` then the shared Flathub apps; appends `/usr/bin` to `PATH` (Debian's flatpak and sudo). apt is never pruned.
+- **macOS** (`home/darwin.nix`): untagged; prunes brew/cask/mas; `PATH` prepends `/opt/homebrew/bin` (where `brew`/`mas` live). Homebrew is a prerequisite — depend shells out to `brew`, it does not build it.
+
+The hooks pass `--tag` explicitly because activation doesn't see session variables. `DEPEND_TAGS` is also set as a session variable on each Linux host so ad-hoc `depend plan`/`prune` pick the right blocks. depend **refuses to prune untagged** while `tags:` blocks apply to the platform, and refuses when an active tag appears in no block (typo guard).
 
 If you add a `packages.yaml` provider that invokes a new external binary, add that binary to the relevant activation `PATH` or the activation silently fails to find it.
 
@@ -75,7 +78,8 @@ If you add a `packages.yaml` provider that invokes a new external binary, add th
 
 ## `packages.yaml` schema (consumed by `depend`)
 
-A top-level map of named blocks. Each has filter keys (`platform`, `architecture`) and provider sections. Providers in use:
+A top-level map of named blocks. Each has filter keys (`platform`, `architecture`, and the machine tags `tags:` / `exclude_tags:`) and provider sections. Tags exist because the NixOS hosts and Crostini are both `platform: linux`: `desktop` = NixOS hosts, `crostini` = the Flex container, the Mac is untagged. Untagged blocks apply to every machine on their platform (e.g. `linux-shared-flatpaks`: Zen + Nextcloud). A `tags:` block applies only when a listed tag is active; `exclude_tags:` wins over `tags:`. Preview any machine from any machine with `depend plan --prune --tag <tag> --config packages.yaml` (the prune part only reflects the machine you run it on). Providers in use:
+- `apt:` (Crostini only) — Debian packages; `flatpak` itself. Never pruned.
 - `flatpak:` (Linux) — keys are app IDs, `source: flathub`.
 - `vscode:` (Linux) — extension IDs; the block uses `requires: [code]` to assert VSCode is present before applying.
 - `pipx:` (Linux) — pip distribution name; `url:` points at a wheel/sdist.

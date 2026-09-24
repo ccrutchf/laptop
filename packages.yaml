@@ -5,6 +5,12 @@
 # is NOT listed gets removed on the next switch. One block per (platform × purpose);
 # the `platform:` key scopes it to a host — the NixOS hosts are `linux`, chris-macbook
 # is `osx`, `all` is both.
+#
+# Two Linux machines share `platform: linux`, so machine tags tell them apart: the
+# NixOS hosts' hook passes `--tag desktop`, the Crostini container on the Lenovo's
+# ChromeOS Flex passes `--tag crostini`, and the Mac passes none. A block with
+# `tags:` applies only when one of them is active; `exclude_tags:` skips it. Untagged
+# blocks apply to every machine on their platform.
 
 
 # ── Cross-platform ───────────────────────────────────────────────────────────
@@ -17,9 +23,10 @@
 # install on a fresh Mac, where depend installs VSCode (the cask) in the same run.
 # Instead each extension `dependencies: [visual-studio-code]` so it installs after
 # the cask symlinks `code` onto the PATH. On Linux the name is unknown (a no-op) and
-# `code` is already present from the Nix vscode.
+# `code` is already present from the Nix vscode. Crostini has no VSCode.
 vscode-extensions:
   platform: all
+  exclude_tags: [crostini]
   vscode:
     anthropic.claude-code:
       dependencies: [visual-studio-code]
@@ -61,18 +68,42 @@ vscode-extensions:
       dependencies: [visual-studio-code]
 
 
+# ── Linux · every Linux machine ─────────────────────────────────────────────
+
+# Flathub apps for both the NixOS hosts and Crostini. `dependencies: [flatpak]` orders
+# them after Crostini's `apt: flatpak` below; on NixOS that name isn't in the plan, so
+# it's a no-op (flatpak comes from Nix there).
+linux-shared-flatpaks:
+  platform: linux
+  flatpak:
+    app.zen_browser.zen:
+      source: flathub
+      dependencies: [flatpak]
+    com.nextcloud.desktopclient.nextcloud:
+      source: flathub
+      dependencies: [flatpak]
+
+
+# ── Linux · Crostini (ChromeOS Flex on the Lenovo) ──────────────────────────
+
+# Debian's container doesn't ship flatpak. apt is never pruned by depend, and
+# Crostini's default user has passwordless sudo, so this is safe from activation.
+crostini-bootstrap:
+  platform: linux
+  tags: [crostini]
+  apt:
+    flatpak:
+
+
 # ── Linux · NixOS hosts ─────────────────────────────────────────────────────
 
 # Desktop apps via Flathub.
 linux-flatpaks:
   platform: linux
+  tags: [desktop]
   flatpak:
     # Comments add context the id doesn't (function or the non-obvious "why");
     # household-name apps are left bare.
-    app.zen_browser.zen:
-      source: flathub
-    com.nextcloud.desktopclient.nextcloud:
-      source: flathub
     # video editor
     org.shotcut.Shotcut:
       source: flathub
@@ -137,6 +168,7 @@ linux-flatpaks:
 linux-data-tools:
   platform: linux
   architecture: amd64
+  tags: [desktop]
   pipx:
     e4e-data-management:
       url: https://github.com/UCSD-E4E/e4e-data-management/releases/download/v0.6.1/e4e_data_management-0.6.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
