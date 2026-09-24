@@ -16,9 +16,9 @@ let
   depend = inputs.dependency-manager.packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
-  # Cross-platform helpers shared by both hosts (claude-backup picks systemd vs
-  # launchd internally based on the platform).
-  imports = [ ./claude-backup.nix ];
+  # Cross-platform helpers shared by both hosts (each picks systemd vs launchd
+  # internally based on the platform).
+  imports = [ ./claude-backup.nix ./git-wip.nix ];
 
   home.username = "chris";
 

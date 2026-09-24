@@ -205,4 +205,20 @@
   };
 
   networking.firewall.enable = true;
+
+  # git-wip's pre-sleep publish (the per-minute sync is a home-manager user timer,
+  # home/git-wip.nix). A system unit because a user unit can't order itself before
+  # sleep.target. Same package and host as the home side, so the same store path.
+  # It holds the suspend ~15s after publishing so Nextcloud can upload.
+  systemd.services.git-wip-pre-sleep = {
+    description = "Publish unfinished git work before sleeping";
+    wantedBy = [ "sleep.target" ];
+    before = [ "sleep.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "chris";
+      ExecStart = "${pkgs.callPackage ../../pkgs/git-wip { host = config.networking.hostName; }}/bin/git-wip pre-sleep";
+      TimeoutStartSec = "90s";
+    };
+  };
 }

@@ -41,6 +41,8 @@ home/
   linux.nix                       Linux/desktop home (GNOME/flatpak/dconf/GTK/darkman) + Linux depend hook
   darwin.nix                      macOS home + the macOS depend hook
   claude-backup.nix               hourly ~/.claude snapshot to Nextcloud (systemd timer / launchd agent)
+  git-wip.nix                     per-minute git-wip sync (systemd timer / launchd agents) + starship marker
+pkgs/git-wip/                     git-wip: unfinished work follows you between machines (bundles via Nextcloud)
 packages.yaml                     non-Nix packages, per-platform blocks, reconciled by depend
 ```
 
@@ -64,6 +66,10 @@ Both hosts run `depend install --prune` (converge — remove installed-but-undec
 - **macOS** (`home/darwin.nix`): prunes brew/cask/mas; `PATH` prepends `/opt/homebrew/bin` (where `brew`/`mas` live). Homebrew is a prerequisite — depend shells out to `brew`, it does not build it.
 
 If you add a `packages.yaml` provider that invokes a new external binary, add that binary to the relevant activation `PATH` or the activation silently fails to find it.
+
+## git-wip: unfinished work between machines
+
+`pkgs/git-wip` snapshots each repo under `~/Repos` (branches, index, working tree incl. untracked files up to 50 MB) and publishes it as git bundles in `~/Documents/GitWip/<repo-key>/`; Nextcloud carries them (one writer per file, renamed into place — never a live `.git`). Bundles are layered so an edit costs about its own size: `<host>.base.bundle` (the bulk, replaced when the layers above outgrow a quarter of it), `<host>.snap.bundle` (changes since base), and `<host>.top.bundle` (metered networks only: changes since snap). The upper layers are hand-built v2 bundles (`write_delta`), because `git bundle create --not` can't drop objects that aren't reachable through commit ancestry. On a metered network (NetworkManager on NixOS, iPhone-hotspot gateway on macOS, `git wip metered on|off|auto` to override; Crostini has no detection) only uploads up to 1 MB go out and bigger ones are held. Repos match across machines by normalised origin URL (root commit when there's no remote); only repos already cloned on a machine sync, nothing is cloned. A peer's snapshot is applied automatically, checked-out branch included, when this clone is unchanged since its last sync or when nothing would be lost; otherwise it's a divergence, resolved by `git wip take <host>` / `git wip keep`. Every automatic overwrite is saved under `refs/wip/backup/*` (`git wip undo`). Runs every minute (`home/git-wip.nix`) plus a pre-sleep publish (`git-wip-pre-sleep` in `modules/nixos/common.nix`; sleepwatcher on macOS; none on Crostini). Opt a repo out with `git config wip.enable false`. Both sides build the package with the same `host` (naming shared with `home/claude-backup.nix`), so they share one store path.
 
 ## `packages.yaml` schema (consumed by `depend`)
 
