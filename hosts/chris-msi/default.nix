@@ -45,8 +45,11 @@
     "mem_sleep_default=deep"
   ];
 
-  # Disable HDA audio power-saving: the SOF codec/controller suspending on idle
-  # clips the onset of playback (first syllable dropped when audio resumes).
+  # No snd_hda_intel options here. Internal audio is SOF (sof-audio-pci-intel-tgl),
+  # so snd_hda_intel only drives the RTX 3060's HDMI-audio function (01:00.1).
+  # Pinning that awake (power_save_controller=N) keeps the whole dGPU out of
+  # runtime D3 -- ~12 W at idle, the battery regression vs. Ubuntu. It also never
+  # fixed the clipped playback onset it was added for.
   #
   # msi_ec: this machine's EC reports 16V4EMS2.108, which upstream msi-ec does not
   # whitelist, so the module refuses to load without an override. The board (MS-16V4)
@@ -60,7 +63,6 @@
   # The dump behind that reasoning, plus the stock fan curves and how to re-capture
   # them, is in ./ec-baseline-16V4EMS2.108.txt.
   boot.extraModprobeConfig = ''
-    options snd_hda_intel power_save=0 power_save_controller=N
     options msi_ec firmware=16V4EMS1.116
   '';
 

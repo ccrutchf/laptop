@@ -94,7 +94,7 @@ The desktop is **GNOME on Wayland** via **GDM** (`services.desktopManager.gnome`
 
 Secrets are **sops-nix** (`.sops.yaml`, `secrets/`); the age identity is derived (`ssh-to-age`) from the SSH key synced via Nextcloud, so every personal machine decrypts and a reinstall doesn't lose it. **Disk:** `hosts/chris-msi/disko-config.nix` is btrfs-on-LUKS, **the 2TB drive ONLY** — Windows lives on a separate, never-referenced NVMe.
 
-**Hardware notes** (in `hosts/chris-msi/default.nix`): NVIDIA RTX 3060 + Intel iGPU using PRIME render-offload; LUKS root with TPM2 auto-unlock (passphrase fallback); GNOME on Wayland (GDM greeter); PipeWire with HDA power-saving disabled to avoid clipped playback onsets.
+**Hardware notes** (in `hosts/chris-msi/default.nix`): NVIDIA RTX 3060 + Intel iGPU using PRIME render-offload; LUKS root with TPM2 auto-unlock (passphrase fallback); GNOME on Wayland (GDM greeter). Don't set `snd_hda_intel` options: that driver only binds the dGPU's HDMI audio (internal audio is SOF), and pinning it awake keeps the RTX 3060 from runtime-suspending.
 
 ## Don't take the running environment down
 
