@@ -30,12 +30,16 @@ let
   src  = "${home}/.claude/";
   dest = "${home}/Documents/ClaudeBackup/${host}/${os}";
 
-  # --delete prunes deleted sessions from the mirror; the excludes are regenerable
-  # churn that would otherwise re-upload on every run. The script mkdir's its own
-  # destination so it works as both a oneshot service and a bare launchd program.
+  # Deliberately NO --delete: the backup is an archive, not a mirror. Claude Code
+  # prunes transcripts untouched for cleanupPeriodDays (default 30), and a mirror
+  # copied those prunes into the backup within the hour — that is how the tensor-tpu
+  # sessions were lost. Local cleanup stays on; old transcripts live on here. The
+  # excludes are regenerable churn that would otherwise re-upload on every run. The
+  # script mkdir's its own destination so it works as both a oneshot service and a
+  # bare launchd program.
   backup = pkgs.writeShellScript "claude-backup" ''
     ${pkgs.coreutils}/bin/mkdir -p ${dest}
-    ${pkgs.rsync}/bin/rsync -a --delete \
+    ${pkgs.rsync}/bin/rsync -a \
       --exclude=shell-snapshots/ --exclude=statsig/ \
       ${src} ${dest}/
   '';
