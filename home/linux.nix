@@ -211,10 +211,12 @@ in
 
   # Bottles ships with no home access, so Wine apps (BrickLink Studio) could only
   # save inside the bottle. Grant ~/Documents (Nextcloud-synced); inside Wine it's
-  # Z:\home\chris\Documents.
+  # Z:\home\chris\Documents. The applications/desktop grants let Bottles' "Add to
+  # Applications" / desktop-shortcut buttons work. Declare changes here: a
+  # `flatpak override` (or Flatseal) replaces the symlink and blocks activation.
   xdg.dataFile."flatpak/overrides/com.usebottles.bottles".text = ''
     [Context]
-    filesystems=xdg-documents;
+    filesystems=xdg-documents;xdg-data/applications:create;xdg-desktop:create;
   '';
 
   # Unified cursor: sets theme + size everywhere at once (GTK + XCURSOR_* for
