@@ -41,7 +41,7 @@ home/
   common.nix                      cross-platform home-manager (shell stack, git, core CLIs, claude-backup) — BOTH hosts
   linux.nix                       Linux/desktop home (GNOME/flatpak/dconf/GTK/darkman) + Linux depend hook
   darwin.nix                      macOS home + the macOS depend hook
-  crostini.nix                    standalone HM for the Flex Linux container: common.nix + UCSD VPN scripts (not linux.nix)
+  crostini.nix                    standalone HM for the Flex Linux container: common.nix + UCSD VPN scripts + GPU shim + Synology FileStation (not linux.nix)
   claude-backup.nix               hourly ~/.claude snapshot to Nextcloud (systemd timer / launchd agent)
   git-wip.nix                     per-minute git-wip sync (systemd timer / launchd agents) + starship marker
 pkgs/git-wip/                     git-wip: unfinished work follows you between machines (bundles via Nextcloud)

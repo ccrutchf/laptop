@@ -12,6 +12,7 @@
 
 let
   depend = inputs.dependency-manager.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  synology = inputs.synology-filestation.packages.${pkgs.stdenv.hostPlatform.system};
 
   # UCSD VPN (AnyConnect protocol; the same endpoint the NixOS hosts reach through
   # the NetworkManager openconnect plugin). Two ways in, because it is not yet known
@@ -44,11 +45,21 @@ in
   home.homeDirectory = "/home/chris";
 
   # Non-NixOS integration: XDG_DATA_DIRS for the launcher, the Nix profile on PATH
-  # in login shells, and so on.
+  # in login shells, and the GPU driver shim (on by default) so Nix-built GUI apps
+  # (the Synology GUI below) find Mesa through /run/opengl-driver.
   targets.genericLinux.enable = true;
-  # ...minus the GPU driver shim, which exists for Nix-built GUI apps (none here;
-  # Zen is a Flatpak) and needs a one-time `sudo non-nixos-gpu-setup`.
-  targets.genericLinux.gpu.enable = false;
+
+  # The shim's root half: a tmpfiles rule creating /run/opengl-driver. home-manager
+  # only warns when it's missing or stale, asking for `sudo non-nixos-gpu-setup`.
+  # Crostini's default user has passwordless sudo (the depend hook relies on it too),
+  # so run it here whenever the drivers change. `sudo -n` fails instead of prompting
+  # if that ever stops being true.
+  home.activation.nonNixosGpuSetup =
+    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      if [[ "$(readlink /run/opengl-driver || true)" != "${config.targets.genericLinux.gpu.drivers}" ]]; then
+        $DRY_RUN_CMD /usr/bin/sudo -n ${lib.getExe config.targets.genericLinux.gpu.setupPackage}
+      fi
+    '';
 
   programs.nix-index.enable = true;
   programs.nix-index-database.comma.enable = true;
@@ -57,6 +68,12 @@ in
     pkgs.openconnect
     ucsd-vpn
     ucsd-vpn-socks
+    # E4E Synology FileStation mounter: the GUI (`SynologyFuse.Gui`), and the CLI for
+    # the shell (the GUI's wrapper only puts it on its own PATH). Both mount through
+    # `fusermount3` from PATH (pure-Rust fuser, no libfuse), which is Debian's setuid
+    # one from `apt: fuse3` in packages.yaml. The Nix one isn't setuid outside NixOS.
+    synology.synologyfuse-gui
+    synology.synology-filestation-fuse
   ];
 
   # This machine's tag in packages.yaml, for ad-hoc `depend plan`/`prune`.

@@ -112,7 +112,21 @@ ChromeOS forwards the port (untested).
 - [ ] Expect it to feel second-class: software rendering and no hardware video
       decode in the container. Use it for research sessions and Chrome for video.
 
-## 7. First-week checks
+## 7. Synology FileStation (Nix-built GUI + CLI)
+- [ ] The switch in step 4 installs `SynologyFuse.Gui` and `synology-filestation-fuse`,
+      apt-installs `fuse3` for the setuid `fusermount3` they mount through, and runs
+      `non-nixos-gpu-setup` (home-manager's GPU shim) through passwordless sudo. That
+      step creates `/run/opengl-driver` so Nix GUI apps find Mesa, and it re-runs
+      whenever the drivers change.
+- [ ] Check GPU acceleration: `glxinfo -B` via comma (`, glxinfo -B`) should name
+      a virgl/virtio renderer rather than llvmpipe. If it says llvmpipe, Flex isn't
+      giving Linux a GPU on this model; the GUI still runs, only slower.
+- [ ] Mount a share under `~/mnt/<share>` from the GUI or the CLI. Then check whether
+      it appears in ChromeOS Files under *Linux files*. If it doesn't, the mount
+      needs `allow_other` plus `user_allow_other` in `/etc/fuse.conf`.
+- [ ] Mounts only live while Linux is running; shutting it down drops them.
+
+## 8. First-week checks
 - [ ] **Sleep drain:** note the battery level at night with the lid closed, and
       check it in the morning.
 - [ ] Zoom test meeting + screen share (step 2).

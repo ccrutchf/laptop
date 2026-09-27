@@ -93,6 +93,8 @@ crostini-bootstrap:
   tags: [crostini]
   apt:
     flatpak:
+    # Setuid /usr/bin/fusermount3 for the Nix-built Synology FileStation mounter.
+    fuse3:
 
 
 # ── Linux · NixOS hosts ─────────────────────────────────────────────────────
