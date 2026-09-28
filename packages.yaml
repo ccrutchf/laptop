@@ -200,7 +200,10 @@ mac-apps:
     # Zen browser (cask `zen`, not `zen-browser`).
     zen:
     spotify:
-    chromium:
+    # Not cask `chromium`: that shipped unversioned trunk snapshots (never upgraded)
+    # and was disabled for failing Gatekeeper. Same Chromium.app, bundle id and
+    # profile dir, but versioned stable releases. The two casks conflict.
+    ungoogled-chromium:
     zoom:
     # Nextcloud desktop client (cask `nextcloud`).
     nextcloud:
