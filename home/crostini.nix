@@ -112,6 +112,26 @@ in
     Environment=GDK_BACKEND=x11
   '';
 
+  # Put the Nix profile in front of garcon, the bridge that feeds Linux apps to the
+  # ChromeOS launcher and starts them. Its unit hard-codes XDG_DATA_DIRS and PATH
+  # without the profile, so Nix-built GUI apps (VSCode, the Synology GUI) got no
+  # launcher entry, and their `Exec=code` wouldn't resolve anyway. A drop-in's
+  # Environment= replaces the whole variable, so garcon's own lists are repeated.
+  xdg.configFile."systemd/user/cros-garcon.service.d/nix-profile.conf".text = ''
+    [Service]
+    Environment="XDG_DATA_DIRS=%h/.nix-profile/share:%h/.local/share:%h/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share"
+    Environment="PATH=%h/.nix-profile/bin:/usr/local/sbin:/usr/local/bin:/usr/local/games:/usr/sbin:/usr/bin:/usr/games:/sbin:/bin"
+  '';
+
+  # gnome-keyring (packages.yaml, for Nextcloud) pulls in gcr's SSH agent, which
+  # takes over SSH_AUTH_SOCK from Debian's openssh agent at the next login and then
+  # refuses git's commit signing (it wants a GUI confirmation). Masked, so only its
+  # Secret Service is used.
+  xdg.configFile."systemd/user/gcr-ssh-agent.socket".source =
+    config.lib.file.mkOutOfStoreSymlink "/dev/null";
+  xdg.configFile."systemd/user/gcr-ssh-agent.service".source =
+    config.lib.file.mkOutOfStoreSymlink "/dev/null";
+
   # Default browser = Zen (the Flatpak), as on the NixOS hosts, instead of handing
   # links to ChromeOS's Chrome through garcon. mimeapps.list covers xdg-open (GUI
   # apps); $BROWSER covers CLIs (gh, OAuth logins), where Crostini sets
