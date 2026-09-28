@@ -112,6 +112,25 @@ in
     Environment=GDK_BACKEND=x11
   '';
 
+  # Default browser = Zen (the Flatpak), as on the NixOS hosts, instead of handing
+  # links to ChromeOS's Chrome through garcon. mimeapps.list covers xdg-open (GUI
+  # apps); $BROWSER covers CLIs (gh, OAuth logins), where Crostini sets
+  # garcon-url-handler. Chrome stays the default on the ChromeOS side. Claude Code
+  # registers its claude-cli handler in the same file, so it's declared here too.
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "text/html" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/http" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/https" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/about" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/unknown" = "app.zen_browser.zen.desktop";
+      "x-scheme-handler/claude-cli" = "claude-code-url-handler.desktop";
+    };
+  };
+  home.sessionVariables.BROWSER =
+    "${config.home.homeDirectory}/.local/share/flatpak/exports/bin/app.zen_browser.zen";
+
   # This machine's tag in packages.yaml, for ad-hoc `depend plan`/`prune`.
   home.sessionVariables.DEPEND_TAGS = "crostini";
 
