@@ -5,9 +5,10 @@
 # (see REBUILD-FLEX.md).
 #
 # Deliberately NOT ./linux.nix: that is the NixOS/GNOME layer (dconf, GTK,
-# darkman). GUI apps here are mostly Flatpaks from packages.yaml (Zen, Nextcloud),
-# selected by `--tag crostini` in the depend hook below; the Nix-built ones (VSCode,
-# the Synology GUI) find Mesa through the genericLinux GPU shim.
+# darkman). GUI apps here are mostly Flatpaks from packages.yaml (Zen, Nextcloud,
+# Slack, Discord), selected by `--tag crostini` in the depend hook below; the
+# Nix-built ones (VSCode, the Synology GUI) find Mesa through the genericLinux GPU
+# shim.
 #
 # GPU acceleration needs chrome://flags/#crostini-gpu-support (then a full "Shut
 # down Linux"); without it the VM has no virtio-gpu and every app renders in software.

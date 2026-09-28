@@ -87,8 +87,8 @@ The NixOS config for this machine (`hosts/chris-lenovo/`,
       MSI has lived on the same `flake.lock` for a while, so the MSI finds any breakage first.
       Each switch also runs `depend install --prune --tag crostini` against
       `packages.yaml`: it apt-installs `flatpak`, adds Flathub, and installs the
-      untagged Linux Flathub apps (Zen, Nextcloud). To add or remove an app here, edit
-      `packages.yaml`, not this machine. Preview with `depend plan --prune`
+      untagged Linux Flathub apps (Zen, Nextcloud, Slack, Discord). To add or
+      remove an app here, edit `packages.yaml`, not this machine. Preview with `depend plan --prune`
       (`DEPEND_TAGS=crostini` is set for you).
 - [ ] **zsh as login shell:**
       ```sh

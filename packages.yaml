@@ -81,6 +81,12 @@ linux-shared-flatpaks:
     com.nextcloud.desktopclient.nextcloud:
       source: flathub
       dependencies: [flatpak]
+    com.slack.Slack:
+      source: flathub
+      dependencies: [flatpak]
+    com.discordapp.Discord:
+      source: flathub
+      dependencies: [flatpak]
 
 
 # ── Linux · Crostini (ChromeOS Flex on the Lenovo) ──────────────────────────
@@ -111,10 +117,6 @@ linux-flatpaks:
     # household-name apps are left bare.
     # video editor
     org.shotcut.Shotcut:
-      source: flathub
-    com.slack.Slack:
-      source: flathub
-    com.discordapp.Discord:
       source: flathub
     us.zoom.Zoom:
       source: flathub

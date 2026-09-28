@@ -78,7 +78,7 @@ If you add a `packages.yaml` provider that invokes a new external binary, add th
 
 ## `packages.yaml` schema (consumed by `depend`)
 
-A top-level map of named blocks. Each has filter keys (`platform`, `architecture`, and the machine tags `tags:` / `exclude_tags:`) and provider sections. Tags exist because the NixOS hosts and Crostini are both `platform: linux`: `desktop` = NixOS hosts, `crostini` = the Flex container, the Mac is untagged. Untagged blocks apply to every machine on their platform (e.g. `linux-shared-flatpaks`: Zen + Nextcloud). A `tags:` block applies only when a listed tag is active; `exclude_tags:` wins over `tags:`. Preview any machine from any machine with `depend plan --prune --tag <tag> --config packages.yaml` (the prune part only reflects the machine you run it on). Providers in use:
+A top-level map of named blocks. Each has filter keys (`platform`, `architecture`, and the machine tags `tags:` / `exclude_tags:`) and provider sections. Tags exist because the NixOS hosts and Crostini are both `platform: linux`: `desktop` = NixOS hosts, `crostini` = the Flex container, the Mac is untagged. Untagged blocks apply to every machine on their platform (e.g. `linux-shared-flatpaks`: Zen, Nextcloud, Slack, Discord). A `tags:` block applies only when a listed tag is active; `exclude_tags:` wins over `tags:`. Preview any machine from any machine with `depend plan --prune --tag <tag> --config packages.yaml` (the prune part only reflects the machine you run it on). Providers in use:
 - `apt:` (Crostini only) — Debian packages; `flatpak` itself. Never pruned.
 - `flatpak:` (Linux) — keys are app IDs, `source: flathub`.
 - `vscode:` (Linux) — extension IDs; the block uses `requires: [code]` to assert VSCode is present before applying.
