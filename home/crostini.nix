@@ -5,14 +5,25 @@
 # (see REBUILD-FLEX.md).
 #
 # Deliberately NOT ./linux.nix: that is the NixOS/GNOME layer (dconf, GTK,
-# darkman). GUI apps here (Zen, Nextcloud) are Flatpaks from packages.yaml, selected
-# by `--tag crostini` in the depend hook below. Nix-built GUI apps need nixGL on a
-# non-NixOS host, and Flatpak brings its own graphics stack.
+# darkman). GUI apps here are mostly Flatpaks from packages.yaml (Zen, Nextcloud),
+# selected by `--tag crostini` in the depend hook below; the Nix-built ones (VSCode,
+# the Synology GUI) find Mesa through the genericLinux GPU shim.
+#
+# GPU acceleration needs chrome://flags/#crostini-gpu-support (then a full "Shut
+# down Linux"); without it the VM has no virtio-gpu and every app renders in software.
 { config, lib, pkgs, inputs, ... }:
 
 let
   depend = inputs.dependency-manager.packages.${pkgs.stdenv.hostPlatform.system}.default;
   synology = inputs.synology-filestation.packages.${pkgs.stdenv.hostPlatform.system};
+
+  # The same VSCode as home/linux.nix, --no-sandbox for a different reason: the
+  # container refuses user namespaces and the Nix store can't hold a setuid
+  # chrome-sandbox, so Electron's sandbox can't start. Debian is FHS, so extensions
+  # that fetch native binaries (rust-analyzer, CodeLLDB) need no nix-ld. Electron
+  # picks Wayland by itself; if sommelier drops it the way it drops Nextcloud (below),
+  # add --ozone-platform=x11.
+  vscode = pkgs.vscode.override { commandLineArgs = "--no-sandbox"; };
 
   # UCSD VPN (AnyConnect protocol; the same endpoint the NixOS hosts reach through
   # the NetworkManager openconnect plugin). Two ways in, because it is not yet known
@@ -54,10 +65,17 @@ in
   # Crostini's default user has passwordless sudo (the depend hook relies on it too),
   # so run it here whenever the drivers change. `sudo -n` fails instead of prompting
   # if that ever stops being true.
+  # Also join `render`: /dev/dri/renderD128 is root:render 0660, and the Crostini
+  # user is created before the VM has a GPU, so Mesa gets EACCES and every app
+  # (Flatpaks too) silently falls back to llvmpipe. Takes effect from the next
+  # "Shut down Linux".
   home.activation.nonNixosGpuSetup =
     lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       if [[ "$(readlink /run/opengl-driver || true)" != "${config.targets.genericLinux.gpu.drivers}" ]]; then
         $DRY_RUN_CMD /usr/bin/sudo -n ${lib.getExe config.targets.genericLinux.gpu.setupPackage}
+      fi
+      if ! /usr/bin/id -nG "$USER" | /usr/bin/grep -qw render; then
+        $DRY_RUN_CMD /usr/bin/sudo -n /usr/sbin/usermod -aG render "$USER"
       fi
     '';
 
@@ -65,6 +83,7 @@ in
   programs.nix-index-database.comma.enable = true;
 
   home.packages = [
+    vscode
     pkgs.openconnect
     ucsd-vpn
     ucsd-vpn-socks
@@ -76,18 +95,35 @@ in
     synology.synology-filestation-fuse
   ];
 
+  # Sommelier (Crostini's Wayland proxy) drops Nextcloud's Qt Wayland connection
+  # whenever the setup wizard changes windows ("The Wayland connection broke"), so
+  # the Flatpak is denied its Wayland socket and falls back to X11 via Xwayland.
+  xdg.dataFile."flatpak/overrides/com.nextcloud.desktopclient.nextcloud".text = ''
+    [Context]
+    sockets=!wayland;
+  '';
+
+  # ...which puts the file-chooser portal on X11 too. Left on Wayland, GTK3 builds
+  # its popovers as Wayland subsurfaces for a dialog parented to an X11 window and
+  # segfaults (right-click in Nextcloud's "Choose" dialog). Debian's own
+  # xdg-desktop-portal-gtk; this is a drop-in for its user unit.
+  xdg.configFile."systemd/user/xdg-desktop-portal-gtk.service.d/x11.conf".text = ''
+    [Service]
+    Environment=GDK_BACKEND=x11
+  '';
+
   # This machine's tag in packages.yaml, for ad-hoc `depend plan`/`prune`.
   home.sessionVariables.DEPEND_TAGS = "crostini";
 
   # Reconcile packages.yaml on every switch, as the other hosts do: `apt: flatpak`
-  # first, then the shared Flathub apps; everything else is tagged `desktop`. Here the
-  # providers are Debian's, not Nix's, so the stripped activation PATH gets /usr/bin
-  # (flatpak, sudo; depend finds apt-get by absolute path). Crostini's default user
-  # has passwordless sudo, so the apt step doesn't prompt. --prune only touches
-  # flatpak here: apt is never pruned.
+  # first, then the shared Flathub apps and the VSCode extensions; everything else is
+  # tagged `desktop`. The stripped activation PATH gets VSCode (for `code`) and
+  # /usr/bin (Debian's flatpak, sudo; depend finds apt-get by absolute path). Crostini's default user
+  # has passwordless sudo, so the apt step doesn't prompt. --prune touches flatpak
+  # and vscode here: apt is never pruned.
   home.activation.dependencyManagerInstall =
     lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      export PATH="$PATH:/usr/bin:/usr/sbin:/bin"
+      export PATH="${lib.makeBinPath [ vscode ]}:$PATH:/usr/bin:/usr/sbin:/bin"
       $DRY_RUN_CMD ${depend}/bin/depend install --prune --tag crostini --config ${../packages.yaml}
     '';
 }

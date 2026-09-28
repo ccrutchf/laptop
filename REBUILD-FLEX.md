@@ -98,6 +98,10 @@ The NixOS config for this machine (`hosts/chris-lenovo/`,
       Then restart the container (right-click *Terminal* → *Shut down Linux*).
 - [ ] **Nextcloud** (installed by the switch above). Start it from the launcher
       (restart Linux first if it isn't listed), sign in, and use **selective sync**.
+      Saving the login creates a gnome-keyring "login" keyring: pick a password you'll
+      remember. Crostini has no login screen to unlock it, so it asks again after
+      each Linux restart. It runs on X11 (see `home/crostini.nix`); in its folder
+      picker, Ctrl+H shows hidden folders and Ctrl+L takes a typed path.
       Never sync the whole account into a ~40GB container. At minimum include
       `Documents/ClaudeBackup` and `Documents/GitWip`, which claude-backup and git-wip
       write into. Synced files show up in ChromeOS Files under **Linux files**.
@@ -123,24 +127,37 @@ ChromeOS forwards the port (untested).
 - [ ] Sign into the Mozilla account for sync.
 - [ ] Set Zen's download folder to `/mnt/chromeos/MyFiles/Downloads`. It needs the
       *Share with Linux* from step 3; otherwise downloads land where ChromeOS can't see them.
-- [ ] Expect it to feel second-class: software rendering and no hardware video
-      decode in the container. Use it for research sessions and Chrome for video.
+- [ ] Expect no hardware video decode in the container: use Chrome for video.
+      Page rendering is GPU-accelerated only with the flag from step 8 on
+      (`about:support` → Compositing `WebRender`, not `WebRender (Software)`).
 
-## 7. Synology FileStation (Nix-built GUI + CLI)
+## 7. VSCode (Nix-built)
+- [ ] The switch in step 4 installs `code` (the same build as the NixOS hosts, with
+      `--no-sandbox`) and the `vscode-extensions` block from `packages.yaml`.
+      Open it once from the launcher to check it starts.
+
+## 8. Synology FileStation (Nix-built GUI + CLI)
 - [ ] The switch in step 4 installs `SynologyFuse.Gui` and `synology-filestation-fuse`,
       apt-installs `fuse3` for the setuid `fusermount3` they mount through, and runs
       `non-nixos-gpu-setup` (home-manager's GPU shim) through passwordless sudo. That
       step creates `/run/opengl-driver` so Nix GUI apps find Mesa, and it re-runs
       whenever the drivers change.
-- [ ] Check GPU acceleration: `glxinfo -B` via comma (`, glxinfo -B`) should name
-      a virgl/virtio renderer rather than llvmpipe. If it says llvmpipe, Flex isn't
-      giving Linux a GPU on this model; the GUI still runs, only slower.
+- [ ] Give Linux a GPU: Flex leaves it off. Set `chrome://flags/#crostini-gpu-support`
+      to *Enabled*, restart ChromeOS, then right-click *Terminal* → *Shut down Linux*
+      (closing the terminal isn't enough). If launchers then say "Your device didn't
+      shut down properly", do that Shut down Linux once more.
+- [ ] The step 4 switch added you to the `render` group; without it Mesa can't open
+      the GPU. It applies from the Shut down Linux above.
+- [ ] Check GPU acceleration: `ls /dev/dri` should list `renderD128`, and
+      `glxinfo -B` via comma (`, glxinfo -B`) should name a virgl renderer rather
+      than llvmpipe. If it says llvmpipe, the VM has no GPU (flag off, or Linux not
+      restarted since); everything still runs, only slower.
 - [ ] Mount a share under `~/mnt/<share>` from the GUI or the CLI. Then check whether
       it appears in ChromeOS Files under *Linux files*. If it doesn't, the mount
       needs `allow_other` plus `user_allow_other` in `/etc/fuse.conf`.
 - [ ] Mounts only live while Linux is running; shutting it down drops them.
 
-## 8. First-week checks
+## 9. First-week checks
 - [ ] **Sleep drain:** note the battery level at night with the lid closed, and
       check it in the morning.
 - [ ] Zoom test meeting + screen share (step 2).

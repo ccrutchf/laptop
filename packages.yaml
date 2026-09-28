@@ -23,10 +23,9 @@
 # install on a fresh Mac, where depend installs VSCode (the cask) in the same run.
 # Instead each extension `dependencies: [visual-studio-code]` so it installs after
 # the cask symlinks `code` onto the PATH. On Linux the name is unknown (a no-op) and
-# `code` is already present from the Nix vscode. Crostini has no VSCode.
+# `code` is already present from the Nix vscode (NixOS hosts and Crostini).
 vscode-extensions:
   platform: all
-  exclude_tags: [crostini]
   vscode:
     anthropic.claude-code:
       dependencies: [visual-studio-code]
@@ -95,6 +94,10 @@ crostini-bootstrap:
     flatpak:
     # Setuid /usr/bin/fusermount3 for the Nix-built Synology FileStation mounter.
     fuse3:
+    # Secret Service (org.freedesktop.secrets) for the Nextcloud Flatpak's login
+    # token; the container has none, so it can't save credentials. D-Bus-activated,
+    # and there's no login to unlock it: it asks for its password after a restart.
+    gnome-keyring:
 
 
 # ── Linux · NixOS hosts ─────────────────────────────────────────────────────
