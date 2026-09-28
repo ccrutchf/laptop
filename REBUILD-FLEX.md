@@ -62,13 +62,27 @@ The NixOS config for this machine (`hosts/chris-lenovo/`,
       ```sh
       curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
       ```
-      Open a new terminal afterwards.
+      Open a new terminal afterwards. Until the switch below, `nix-shell --help` and
+      friends fail with "The 'man' command was not found": Debian's container has no
+      `man`, and the switch brings it (home-manager's default `man-db`).
 - [ ] **Clone and switch:**
       ```sh
+      mkdir -p ~/.config/nix
+      echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
       mkdir -p ~/Repos/personal && cd ~/Repos/personal
-      git clone git@github.com:ccrutchf/laptop.git && cd laptop
-      nix run home-manager/master -- switch --flake '.#chris@crostini'
+      nix shell nixpkgs#git nixpkgs#openssh -c git clone git@github.com:ccrutchf/laptop.git
+      cd laptop
+      nix shell nixpkgs#git -c nix run home-manager/master -- switch --flake '.#chris@crostini'
       ```
+      Debian's container has no git, so the first clone and switch borrow it from
+      nixpkgs. The switch needs it too: the Synology FileStation package has a Cargo
+      git dependency (`smb2`), which crane fetches with `builtins.fetchGit` during
+      evaluation, and that shells out to `git` on PATH. After this, `programs.git`
+      (`home/common.nix`) keeps git on PATH for later switches.
+      The `nix.conf` line is a no-op on Determinate Nix (flakes on by default) and
+      needed on upstream Nix. It has to be config, not a
+      `--extra-experimental-features` flag: home-manager runs its own `nix build`,
+      which doesn't see the outer command's flags.
       From then on, `home-manager switch --flake '.#chris@crostini'`. Update after the
       MSI has lived on the same `flake.lock` for a while, so the MSI finds any breakage first.
       Each switch also runs `depend install --prune --tag crostini` against

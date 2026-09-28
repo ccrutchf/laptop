@@ -30,7 +30,7 @@ Personal machines; not part of the KastnerRG/krg-infra fleet.
 | `home/linux.nix` / `home/darwin.nix` | Per-host home (imports `common.nix`); each runs `depend` on switch. Linux half configures the GNOME desktop (dconf, extensions, GTK, darkman). |
 | `packages.yaml` | Non-Nix packages, per-platform blocks, reconciled by `depend`. |
 | `.sops.yaml`, `secrets/` | sops-nix encrypted secrets (age via the Nextcloud-synced SSH key). |
-| `REBUILD.md` | Index → `REBUILD-MSI.md`, `REBUILD-LENOVO.md` (NixOS) and `REBUILD-MAC.md` (macOS) runbooks. |
+| `REBUILD.md` | Index → `REBUILD-MSI.md` (NixOS), `REBUILD-FLEX.md` (Lenovo on ChromeOS Flex) and `REBUILD-MAC.md` (macOS) runbooks. |
 | `CLAUDE.md` | Architecture details and gotchas. |
 
 ## Everyday use
