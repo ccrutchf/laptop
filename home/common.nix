@@ -129,7 +129,12 @@ in
     };
   };
 
-  programs.vim.enable = true;
+  programs.vim = {
+    enable = true;
+    # Terminal vim, not home-manager's default vim-full: that one bundles gvim,
+    # dragging GTK2/at-spi/gsettings (1.5 GiB closure vs ~90 MiB) into every host.
+    packageConfigurable = pkgs.vim;
+  };
 
   # Per-project dev shells: auto-load each repo's flake / devShell on cd.
   programs.direnv = {
