@@ -31,6 +31,12 @@
     })
   ];
 
+  # Put Homebrew on the interactive PATH. Its installer registers /opt/homebrew/bin
+  # in /etc/paths.d, but nix-darwin's shell init builds PATH itself and never runs
+  # path_helper, so that entry is ignored. systemPath lands after the Nix profiles,
+  # so a Nix-provided tool still wins over a same-named formula.
+  environment.systemPath = [ "/opt/homebrew/bin" "/opt/homebrew/sbin" ];
+
   # Nix was installed with the official upstream multi-user installer (not
   # Determinate), so nix-darwin manages the Nix installation and daemon. Because
   # the upstream installer's /etc/nix/nix.conf does NOT enable flakes, we must turn
