@@ -95,9 +95,14 @@
   # Registers /proc/sys/fs/binfmt_misc/qemu-aarch64.
   boot.binfmt = {
     emulatedSystems = [ "aarch64-linux" ];
-    # Without fixBinary, qemu's interpreter path is resolved at exec time, but
-    # inside systemd-nspawn containers that /run/binfmt path doesn't exist.
-    registrations.aarch64-linux.fixBinary = true;
+    # Static qemu, which the module registers with fixBinary: the kernel opens
+    # the emulator at registration, so it works where its path doesn't exist
+    # (systemd-nspawn containers, the Nix build sandbox). Don't instead force
+    # fixBinary on the default dynamic emulator: the module then treats the
+    # sandbox as covered and exposes nothing, but the preloaded qemu-*-binfmt-P
+    # wrapper still execs a dynamic qemu from the store, so every sandboxed
+    # aarch64 build dies with exit 255.
+    preferStaticEmulators = true;
   };
 
   networking.hostName = "chris-msi";
