@@ -157,6 +157,9 @@ linux-flatpaks:
     # N64 emulator — ParaLLEl RDP, gamepad auto-config; successor to simple64
     io.github.gopher64.gopher64:
       source: flathub
+    # AI image upscaling (Real-ESRGAN, Vulkan)
+    io.gitlab.theevilskeleton.Upscaler:
+      source: flathub
     # SNES emulator
     com.snes9x.Snes9x:
       source: flathub

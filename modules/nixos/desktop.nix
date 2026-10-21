@@ -71,6 +71,12 @@
   # Bluetooth (controller present). Pinned explicitly so the flake owns it.
   hardware.bluetooth.enable = true;
 
+  # Logitech Unifying/Bolt receivers: udev rules so chris can talk to the receiver
+  # without root, plus Solaar (pairing, battery, DPI/Fn-swap settings). Its tray
+  # icon relies on the AppIndicator extension enabled in home/linux.nix.
+  hardware.logitech.wireless.enable = true;
+  programs.solaar.enable = true;
+
   # Mission Center (home/linux.nix) ships a `missioncenter-magpie-setup` script that
   # is a no-op on NixOS: it setcaps a binary in place and writes /etc/udev/rules.d,
   # both read-only here. Its two real grants, declared instead:
