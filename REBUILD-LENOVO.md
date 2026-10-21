@@ -1,20 +1,25 @@
 # chris-lenovo install runbook
 
-First install onto the **Lenovo ThinkPad X1 Carbon Gen 9** (i7-1185G7, 16GB,
-512GB NVMe, Intel Iris Xe) — btrfs-on-LUKS, impermanent root, no discrete GPU.
+Moving the **Lenovo ThinkPad X1 Carbon Gen 9** (i7-1185G7, 16GB, 512GB NVMe,
+Intel Iris Xe) from ChromeOS Flex to NixOS — btrfs-on-LUKS, impermanent root, no
+discrete GPU. It stays the shared couch machine: two accounts, `chris` and
+`fiona`, GNOME with Chrome and Zoom, updating itself (`my.autoUpgrade`).
 
-> **This wipes the whole disk, including the pre-installed Windows 11 Pro.**
+> **This wipes the whole disk, including ChromeOS Flex and the Linux container.**
 > Unlike `chris-msi` (dual-boot, where disko names only one of two NVMes), this
 > machine is NixOS-only and the single NVMe is repartitioned in full.
 
 > For the other hosts see [`REBUILD-MSI.md`](REBUILD-MSI.md) (NixOS, MSI) and
 > [`REBUILD-MAC.md`](REBUILD-MAC.md) (macOS).
 
-## 0. Before the wipe
-- [ ] **Anything wanted off the Windows install** — it does not survive. Grab the
-      Windows product key if you might ever want it back
-      (`wmic path SoftwareLicensingService get OA3xOriginalProductKey`); on this
-      machine it is normally embedded in firmware and re-activates on its own.
+## 0. Before the wipe (from ChromeOS Flex)
+- [ ] **Fiona's local files.** ChromeOS keeps Downloads and anything else under
+      *My Files* on the disk only; Google Drive files and Chrome sync are in her
+      account and come back by themselves. In Files, move what she wants to keep
+      into *Google Drive*, and wait until it shows as synced.
+- [ ] **Chris's Linux container.** Repos travel via GitHub and git-wip (check
+      `git wip status` shows *in sync* for each, with Nextcloud up); copy anything
+      else in the container's `~` that isn't in a repo or Nextcloud.
 - [ ] **Confirm the SSH key is in Nextcloud** — it is the sops/age identity *and*
       the commit-signing key, and it is what makes this machine able to decrypt
       the same secrets as the others.
@@ -54,7 +59,10 @@ sudo nix --experimental-features "nix-command flakes" \
 # with no recovery short of re-mounting from the ISO. disko mounted /persist:
 sudo mkdir -p /mnt/persist/passwd
 mkpasswd -m sha-512 | sudo tee /mnt/persist/passwd/chris
-sudo chmod 600 /mnt/persist/passwd/chris
+# Fiona's too: have her type it, or set a temporary one and change it together
+# on first login (see step 4; `passwd` does not work here).
+mkpasswd -m sha-512 | sudo tee /mnt/persist/passwd/fiona
+sudo chmod 600 /mnt/persist/passwd/chris /mnt/persist/passwd/fiona
 
 # Install from a CLEAN checkout of a commit that is on GitHub main: my.autoUpgrade
 # only takes over from systems built from a pushed commit (a dirty tree pauses it).
@@ -76,8 +84,18 @@ sudo nixos-install --no-root-passwd --flake /path/to/repo#chris-lenovo
       ```
 - [ ] **Restore the SSH key** from Nextcloud to `~/.ssh/id_ed25519` (sops
       decryption + commit signing).
-- [ ] **Enroll a fingerprint** — Settings → Users → Fingerprint Login
-      (`services.fprintd.enable` is on). GNOME then uses it for login and sudo.
+- [ ] **Enroll fingerprints, both of you** — each logged in as themselves:
+      Settings → Users → Fingerprint Login (`services.fprintd.enable` is on).
+      GNOME then uses it for login (and sudo, for chris).
+- [ ] **Fiona's first login.** Open Chrome (first in the dock) and sign in;
+      Chrome sync brings back her bookmarks, extensions and passwords. Then join
+      `zoom.us/test` in the Zoom app and try a screen share.
+- [ ] **Changing a password** is not `passwd` or GNOME Settings: users are
+      declarative (`users.mutableUsers = false`) and /etc/shadow is wiped every
+      boot. Rewrite the hash instead, which takes effect on the next boot:
+      ```sh
+      mkpasswd -m sha-512 | sudo tee /persist/passwd/fiona
+      ```
 - [ ] **Wi-Fi** should already work (AX201 via
       `hardware.enableRedistributableFirmware`). If not, that flag is the suspect.
 

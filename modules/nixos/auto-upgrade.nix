@@ -18,7 +18,8 @@
 # Also skipped: on battery (ConditionACPower) and on a metered network
 # (NetworkManager's flag, as git-wip reads it), since a build can pull gigabytes.
 #
-# Notifications go to notifyUser's GNOME session, if one is open:
+# Notifications go to notifyUser's GNOME session, if one is open (and the first
+# one also to readyUsers, who have nothing to act on in the other two):
 #   - an update is ready (once per new generation): takes effect on restart;
 #   - the upgrade failed (e.g. a nixpkgs bump broke a local patch at build time,
 #     which CI's eval cannot catch);
@@ -30,14 +31,14 @@ let
   profile = "/nix/var/nix/profiles/system";
 
   notify = pkgs.writeShellScript "auto-upgrade-notify" ''
-    # $1 = title, $2 = body. A no-op when notifyUser has no session bus.
-    uid=$(${pkgs.coreutils}/bin/id -u ${cfg.notifyUser}) || exit 0
+    # $1 = user, $2 = title, $3 = body. A no-op when the user has no session bus.
+    uid=$(${pkgs.coreutils}/bin/id -u "$1") || exit 0
     bus=/run/user/$uid/bus
     [ -S "$bus" ] || exit 0
-    ${pkgs.util-linux}/bin/runuser -u ${cfg.notifyUser} -- \
+    ${pkgs.util-linux}/bin/runuser -u "$1" -- \
       ${pkgs.coreutils}/bin/env DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" \
       ${pkgs.libnotify}/bin/notify-send --app-name="System update" \
-        --icon=software-update-available "$1" "$2" || true
+        --icon=software-update-available "$2" "$3" || true
   '';
 
   # True (exit 0) when no generation has been created in staleDays.
@@ -51,7 +52,7 @@ let
     skip() {
       echo "skipping: $1"
       if ${stale}; then
-        ${notify} "No system update in ${toString cfg.staleDays} days" "$1"
+        ${notify} ${cfg.notifyUser} "No system update in ${toString cfg.staleDays} days" "$1"
       fi
       exit 1
     }
@@ -89,10 +90,12 @@ let
     new=$(${pkgs.coreutils}/bin/readlink -f ${profile})
     if [ "$new" != "$(${pkgs.coreutils}/bin/readlink -f /run/booted-system)" ] \
        && [ "$new" != "$(${pkgs.coreutils}/bin/cat /run/auto-upgrade-notified 2> /dev/null)" ]; then
-      ${notify} "System update ready" "It takes effect the next time you restart."
+      for u in ${toString ([ cfg.notifyUser ] ++ cfg.readyUsers)}; do
+        ${notify} "$u" "System update ready" "It takes effect the next time you restart."
+      done
       echo "$new" > /run/auto-upgrade-notified
     elif ${stale}; then
-      ${notify} "No system update in ${toString cfg.staleDays} days" \
+      ${notify} ${cfg.notifyUser} "No system update in ${toString cfg.staleDays} days" \
         "Upgrades run, but ${cfg.branch} isn't moving. Check the update-flake-lock workflow on GitHub."
     fi
   '';
@@ -113,6 +116,14 @@ in {
       type = types.str;
       default = "chris";
       description = "Whose GNOME session gets the update notifications.";
+    };
+    readyUsers = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = ''
+        Other users told only that an update is ready to apply on restart, not
+        about failures or stalls, which they can't act on.
+      '';
     };
     staleDays = mkOption {
       type = types.int;
@@ -147,7 +158,7 @@ in {
       description = "Notify that the unattended NixOS upgrade failed";
       serviceConfig.Type = "oneshot";
       script = ''
-        ${notify} "System update failed" \
+        ${notify} ${cfg.notifyUser} "System update failed" \
           "See: journalctl -u nixos-upgrade. The current system is unchanged."
       '';
     };

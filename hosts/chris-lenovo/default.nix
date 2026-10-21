@@ -31,6 +31,7 @@
   my.secureBoot.enable   = false;  # PHASE 2: flip true AFTER `sbctl create-keys` (see module)
   my.backups.enable      = false;  # flip true AFTER the age key + secrets/secrets.yaml exist
   my.autoUpgrade.enable  = true;   # daily build of GitHub main for next boot; pauses on local builds (see module)
+  my.autoUpgrade.readyUsers = [ "fiona" ];  # she sees "restart to update", never the failures
 
   # LUKS device is created/declared by disko. Here we only add the TPM2 auto-unlock
   # opt; the keyslot is enrolled post-install with systemd-cryptenroll (and
@@ -72,11 +73,40 @@
   # and sudo prompts once a finger is enrolled: Settings -> Users -> Fingerprint.
   services.fprintd.enable = true;
 
+  # Fiona's account: this is the shared couch machine that replaced ChromeOS Flex.
+  # Not in wheel; networkmanager lets her join Wi-Fi without an admin password.
+  # Like chris's, the hash lives in /persist (impermanence wipes /etc/shadow every
+  # boot), so it has to exist BEFORE install or she can't log in (REBUILD-LENOVO.md).
+  users.users.fiona = {
+    isNormalUser = true;
+    description = "Fiona McHenry-Crutchfield";
+    hashedPasswordFile = "/persist/passwd/fiona";
+    extraGroups = [ "networkmanager" ];
+  };
+
   # Machine-specific packages. The generic tooling (pciutils, dnsutils, sops/age,
   # sbctl, ...) comes from modules/nixos/common.nix.
+  #
+  # Chrome and Zoom are system packages, not Flatpaks in packages.yaml: depend
+  # installs Flatpaks per user, into chris's home, so fiona would see neither.
+  # Chrome is what she had on Flex; signing in brings her sync back. Both update
+  # with the system (my.autoUpgrade).
   environment.systemPackages = with pkgs; [
     powertop          # idle/power tuning on battery
+    google-chrome
+    zoom-us
   ];
+
+  # Dock defaults for anyone who hasn't customised theirs (fiona; chris's home
+  # config doesn't set favorites either). Chrome first, like the Flex shelf.
+  # google-chrome.desktop, not com.google.Chrome.desktop: the latter is NoDisplay.
+  programs.dconf.profiles.user.databases = [{
+    settings."org/gnome/shell".favorite-apps = [
+      "google-chrome.desktop"
+      "Zoom.desktop"
+      "org.gnome.Nautilus.desktop"
+    ];
+  }];
 
   # Kept in sync with home.stateVersion in home/common.nix, which is shared by every
   # host — so this is 25.11 rather than the release current at install time. It is a
