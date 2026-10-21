@@ -1,16 +1,27 @@
 name: flake
 
-# Validate both hosts of the flake. The NixOS host is evaluated (a full system
+# Validate every host of the flake. The NixOS hosts are evaluated (a full system
 # build pulls cudatoolkit/steam/android-studio — multi-GB, won't fit a hosted
 # runner); evaluating the toplevel derivation still forces the whole module tree
-# and the hosts/ modules/nixos/ home/ import paths to resolve. The smaller darwin
-# host is built for real on a macOS runner.
+# and the hosts/ modules/nixos/ home/ import paths to resolve. The one piece that
+# eval can't vouch for — chris-msi's locally patched nvidia-open, which breaks at
+# BUILD time when a nixpkgs bump stops the patch applying — is built for real.
+# The smaller darwin host is built for real on a macOS runner.
+#
+# update-flake-lock.yml calls this with a candidate flake.lock (an artifact) and
+# pushes it only if every job here passes.
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      lock-artifact:
+        description: Artifact holding a flake.lock to test in place of the committed one.
+        type: string
+        default: ''
 
 jobs:
   nixos:
@@ -22,15 +33,36 @@ jobs:
         host: [chris-msi, chris-lenovo]
     steps:
       - uses: actions/checkout@v4
+      - if: ${{ inputs.lock-artifact }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.lock-artifact }}
       - uses: DeterminateSystems/nix-installer-action@main
       - name: Evaluate the system closure
         run: nix eval .#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel.drvPath --raw
+
+  nvidia:
+    name: build chris-msi nvidia-open (local patch)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - if: ${{ inputs.lock-artifact }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.lock-artifact }}
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Build the patched kernel module
+        run: nix build .#nixosConfigurations.chris-msi.config.hardware.nvidia.package.open --print-build-logs
 
   crostini:
     name: eval chris@crostini (home-manager, x86_64-linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - if: ${{ inputs.lock-artifact }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.lock-artifact }}
       - uses: DeterminateSystems/nix-installer-action@main
       - name: Evaluate the home-manager activation package
         run: nix eval '.#homeConfigurations."chris@crostini".activationPackage.drvPath' --raw
@@ -40,6 +72,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - if: ${{ inputs.lock-artifact }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.lock-artifact }}
       - uses: DeterminateSystems/nix-installer-action@main
       # NOTE: requires the dependency-manager flake's aarch64-darwin output to be
       # published and locked here (flake.lock), and its nix/deps.json regenerated

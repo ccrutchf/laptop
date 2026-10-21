@@ -15,7 +15,7 @@ None of them are part of the KastnerRG/krg-infra fleet.
 - **Apply (NixOS):** `sudo nixos-rebuild switch --flake .#chris-msi` (or `.#chris-lenovo`)
 - **Apply (macOS):** `darwin-rebuild switch --flake .#chris-macbook`
 - Both run the home-manager activation, which runs `depend install --prune` against `packages.yaml` — converging the non-Nix layer to the manifest on both hosts (see below).
-- **Update inputs:** `nix flake update` (or a single input), then switch.
+- **Update inputs:** normally automatic: `update-flake-lock.yml` bumps the lock weekly and the NixOS hosts pick it up via `my.autoUpgrade` (see below). By hand: `nix flake update` (or a single input), then switch.
 - **Validate without activating:** `nixos-rebuild build --flake .#chris-msi`, or `nix build .#darwinConfigurations.chris-macbook.system`, or `nix eval .#nixosConfigurations.chris-msi.config.system.build.toplevel.drvPath` (cheap eval). Crostini: `nix eval '.#homeConfigurations."chris@crostini".activationPackage.drvPath'`. CI does this for every host (`.github/workflows/flake.yml`). Confirm a change builds before switching — and ALWAYS before a disk wipe.
 - **Full reinstall:** `REBUILD.md` is the index → `REBUILD-MSI.md` (NixOS, disko wipes the 2TB drive; Windows on the other NVMe is untouched) and `REBUILD-MAC.md` (macOS bootstrap).
 - **Preview non-Nix package changes:** `depend plan --config packages.yaml` (add `--prune` to also preview removals; on Linux `DEPEND_TAGS` selects this machine's blocks). `nixos-rebuild`/`darwin-rebuild` evaluation is the only validation — there is no separate test suite here.
@@ -136,4 +136,6 @@ General rules for this machine:
 
 ## CI
 
-`.github/workflows/flake.yml` validates every host on every push/PR: the NixOS hosts and the `chris@crostini` home config are evaluated (a full system build is multi-GB — too big for hosted runners), the darwin host is built on a macOS runner. The darwin job requires the `dependency-manager` darwin output to be published + locked here.
+`.github/workflows/flake.yml` validates every host on every push/PR: the NixOS hosts and the `chris@crostini` home config are evaluated (a full system build is multi-GB — too big for hosted runners), chris-msi's locally patched nvidia-open is built (a patch that stops applying fails at build time, not eval), and the darwin host is built on a macOS runner. The darwin job requires the `dependency-manager` darwin output to be published + locked here.
+
+`.github/workflows/update-flake-lock.yml` runs weekly (and on demand): `nix flake update`, then all of `flake.yml` against the new lock (it's a reusable workflow taking a `lock-artifact`), then a push of the lock to main only if everything passed. No PR and no PAT: it pushes with its own token, which is fine because main is unprotected and the exact tree was just checked. This is the feed `my.autoUpgrade` pulls from.

@@ -1,0 +1,64 @@
+name: update flake.lock
+
+# Weekly: bump every input, run all of flake.yml against the new lock, and push
+# it to main only if every host passes. The NixOS hosts' my.autoUpgrade pulls
+# main daily (modules/nixos/auto-upgrade.nix), so this is what keeps them
+# current. A failure leaves main untouched; GitHub emails the failed run, and
+# after my.autoUpgrade.staleDays the laptops say so too.
+#
+# Pushed with the workflow's own token, which doesn't trigger flake.yml again;
+# it doesn't need to, as the exact tree was just checked. If main moved during
+# the run, the push is rejected and next week's run starts from the new main.
+
+on:
+  schedule:
+    - cron: '0 10 * * 1'   # Mondays 10:00 UTC, before the Pacific morning
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - run: nix flake update
+      - id: diff
+        run: |
+          if git diff --quiet flake.lock; then echo changed=false; else echo changed=true; fi >> "$GITHUB_OUTPUT"
+      - if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: flake-lock
+          path: flake.lock
+
+  check:
+    needs: update
+    if: needs.update.outputs.changed == 'true'
+    uses: ./.github/workflows/flake.yml
+    with:
+      lock-artifact: flake-lock
+
+  push:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: flake-lock
+      - name: Commit and push
+        run: |
+          # Name the inputs that moved, like the hand-written lock commits do.
+          moved=$(jq -rn --argjson old "$(git show HEAD:flake.lock)" --slurpfile new flake.lock '
+            [$new[0].nodes | to_entries[]
+              | select(.value.locked.rev != null
+                       and .value.locked.rev != $old.nodes[.key].locked.rev)
+              | .key] | join(", ")')
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "flake.lock: update ${moved:-inputs}"
+          git push
