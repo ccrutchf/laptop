@@ -66,6 +66,18 @@ vscode-extensions:
     redhat.vscode-yaml:
       dependencies: [visual-studio-code]
 
+# Kairos window-focus reporter, built from ~/Repos/personal/phone-dashboard/vscode.
+# Not on the Marketplace: that repo's tools/install-vscode-extension.sh builds the .vsix
+# at the url: below, and depend installs it from there (reinstalling when the file
+# changes; `depend update` skips it). Without the file and without the extension, the
+# entry fails — run the script first on a new machine.
+kairos-vscode:
+  platform: linux
+  tags: [desktop]
+  vscode:
+    phonedash.phone-dash-focus:
+      url: ~/.local/share/phone-dash/phone-dash-focus.vsix
+
 
 # ── Linux · every Linux machine ─────────────────────────────────────────────
 
