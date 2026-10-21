@@ -159,7 +159,44 @@
     ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x9a21", ATTR{power/control}="on"
     SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9008", MODE="0660", TAG+="uaccess"
     ACTION=="add|change", SUBSYSTEM=="platform", KERNEL=="msi-ec", RUN+="${pkgs.coreutils}/bin/chgrp wheel /sys/%p/shift_mode /sys/%p/fan_mode /sys/%p/cooler_boost", RUN+="${pkgs.coreutils}/bin/chmod g+w /sys/%p/shift_mode /sys/%p/fan_mode /sys/%p/cooler_boost"
+    SUBSYSTEM=="thunderbolt", ATTR{vendor}=="0x1d3", ATTR{device}=="0x708", TAG+="systemd", ENV{SYSTEMD_ALIAS}="/dev/tbdock", ENV{SYSTEMD_WANTS}+="dock-performance.service"
   '';
+
+  # Docked = on the Ugreen TB4 dock (the udev rule above). There, run the CPU
+  # flat out: power-profiles-daemon "performance" (intel_pstate EPP=performance;
+  # the "powersave" governor name is misleading — under HWP it is the dynamic
+  # one, EPP is the real knob). Going through PPD rather than writing sysfs keeps
+  # GNOME's power menu truthful and avoids two owners of EPP. BindsTo the dock's
+  # device unit, so unplugging it stops the service and ExecStop drops back to
+  # balanced (overriding any manual pick made while docked).
+  systemd.services.dock-performance = {
+    description = "power-profiles-daemon performance profile while docked";
+    bindsTo = [ "dev-tbdock.device" ];
+    after = [ "dev-tbdock.device" "power-profiles-daemon.service" ];
+    wants = [ "power-profiles-daemon.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.power-profiles-daemon}/bin/powerprofilesctl set performance";
+      ExecStop = "${pkgs.power-profiles-daemon}/bin/powerprofilesctl set balanced";
+    };
+  };
+  # Belt and braces for booting on the dock: coldplug should already have
+  # started dock-performance, but re-check once per login. (The logged-in user
+  # may set the PPD profile; that is how GNOME's power menu does it.)
+  systemd.user.services.dock-performance-login = {
+    description = "Performance profile at login if docked";
+    wantedBy = [ "graphical-session.target" ];
+    after = [ "graphical-session.target" ];
+    serviceConfig.Type = "oneshot";
+    script = ''
+      for d in /sys/bus/thunderbolt/devices/*; do
+        if [ "$(cat "$d/vendor" 2>/dev/null)" = 0x1d3 ] && [ "$(cat "$d/device" 2>/dev/null)" = 0x708 ]; then
+          exec ${pkgs.power-profiles-daemon}/bin/powerprofilesctl set performance
+        fi
+      done
+    '';
+  };
 
   # NVIDIA RTX 3060 Mobile (Ampere) + Intel Tiger Lake iGPU. PRIME render offload:
   # iGPU drives the display, NVIDIA on demand via the `nvidia-offload` wrapper.
