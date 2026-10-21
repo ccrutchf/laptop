@@ -102,6 +102,13 @@
   # (home-manager sets this to "5m" by default — that was the 5-minute kill.)
   systemd.services.home-manager-chris.serviceConfig.TimeoutStartSec = lib.mkForce "30min";
 
+  # When the kernel OOM-kills one process, systemd's default OOMPolicy=stop then
+  # tears down its whole unit. Apps launched from GNOME get one scope each, so a
+  # runaway test run from a VS Code terminal took all of VS Code with it (every
+  # window, every Claude Code session). With `continue`, only the killed process
+  # dies and the rest of the app carries on.
+  systemd.user.settings.Manager.DefaultOOMPolicy = "continue";
+
   fonts = {
     # ubuntu-classic ships the Ubuntu / Ubuntu Mono families; Noto gives broad
     # Unicode + a real serif; liberation covers the Arial/Times/Courier metric-
