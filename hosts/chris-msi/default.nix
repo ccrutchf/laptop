@@ -115,11 +115,14 @@
   # would stop MM touching just that port.)
   systemd.services.ModemManager.enable = lib.mkForce false;
 
-  # Dual-boot with Windows: Windows treats the RTC as local time, so match it here
-  # instead of fighting it (otherwise the clock is off by the UTC offset after
-  # switching OSes). The cleaner alternative is making Windows use UTC (the
-  # `RealTimeIsUniversal` registry DWORD), but this matches your usual approach.
-  time.hardwareClockInLocalTime = true;
+  # Dual-boot with Windows: the RTC is kept in UTC (the NixOS default), and
+  # Windows is told to match via the registry value
+  # HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation\RealTimeIsUniversal
+  # (QWORD 1). With a local-time RTC, systemd never writes the RTC back, so after
+  # the battery was unplugged for a repaste it stayed at 2020: every boot then
+  # started in the past, NTP jumped the clock forward, and every Persistent timer
+  # (btrfs scrub, nix-gc, fstrim) fired at boot. In UTC mode Linux keeps the RTC
+  # in sync itself.
   # xpadneo: out-of-tree driver for Xbox One/Series controllers over Bluetooth.
   # Adds rumble + battery reporting and disables BT ERTM (the Enhanced Re-
   # Transmission Mode Xbox pads choke on when pairing). Pairing keys land in
