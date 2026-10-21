@@ -1,0 +1,23 @@
+Release the RM API lock in rm_power_source_change_event even when no GPU is
+attached yet. Backport of NVIDIA's own fix, which first shipped in 615.78.08.
+
+The _PSR (AC adapter) ACPI notifier is installed when nvidia.ko loads, before
+RmInitAdapter attaches GPU 0. An AC power-source event in that window takes the
+API lock, finds gpumgrGetGpu(0) == NULL, and returns without releasing it. GSP
+init (kgspInitRm -> rmapiLockAcquire) and every later NVPCF notify then block
+forever. See NVIDIA/open-gpu-kernel-modules#1421.
+
+--- a/src/nvidia/arch/nvalloc/unix/src/osapi.c
++++ b/src/nvidia/arch/nvalloc/unix/src/osapi.c
+@@ -4543,9 +4543,9 @@
+                 }
+                 os_unref_dynamic_power(nv, NV_DYNAMIC_PM_FINE);
+             }
+-            // UNLOCK: release API lock
+-            rmapiLockRelease();
+         }
++        // UNLOCK: release API lock
++        rmapiLockRelease();
+     }
+ 
+     if (rmStatus != NV_OK)

@@ -168,7 +168,24 @@
     powerManagement.finegrained = true;
     open = true;
     nvidiaSettings = true;
-    package = config.boot.kernelPackages.nvidiaPackages.stable;
+    # Backported lock-leak fix (see the patch header): an AC power-source event
+    # while nvidia.ko is loading but the GPU isn't attached yet leaks the RM API
+    # lock, so nvidia_drm's GSP init hangs forever. That wedged boot on
+    # 2026-10-10: Load Kernel Modules timed out, pciehp then hung on the dock
+    # replug, and the dock's USB never came back. Fixed upstream in 615.78.08;
+    # the assert makes this fail to build once stable reaches it, so the
+    # patch gets dropped instead of silently piling up.
+    package =
+      let
+        stable = config.boot.kernelPackages.nvidiaPackages.stable;
+      in
+      assert lib.assertMsg (lib.versionOlder stable.version "615.78.08")
+        "nvidia ${stable.version} has the _PSR lock fix; drop nvidia-psr-api-lock-leak.patch";
+      stable // {
+        open = stable.open.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [ ./nvidia-psr-api-lock-leak.patch ];
+        });
+      };
 
     prime = {
       offload = {
