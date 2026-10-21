@@ -20,6 +20,7 @@
       ../../modules/nixos/hibernation.nix
       ../../modules/nixos/secure-boot.nix
       ../../modules/nixos/backups.nix
+      ../../modules/nixos/auto-upgrade.nix
     ];
 
   # --- local feature toggles (see each module) ---
@@ -29,6 +30,7 @@
   my.hibernation.enable  = false;
   my.secureBoot.enable   = false;  # PHASE 2: flip true AFTER `sbctl create-keys` (see module)
   my.backups.enable      = false;  # flip true AFTER the age key + secrets/secrets.yaml exist
+  my.autoUpgrade.enable  = true;   # daily build of GitHub main for next boot; pauses on local builds (see module)
 
   # LUKS device is created/declared by disko. Here we only add the TPM2 auto-unlock
   # opt; the keyslot is enrolled post-install with systemd-cryptenroll (and

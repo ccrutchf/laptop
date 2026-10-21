@@ -56,6 +56,8 @@ sudo mkdir -p /mnt/persist/passwd
 mkpasswd -m sha-512 | sudo tee /mnt/persist/passwd/chris
 sudo chmod 600 /mnt/persist/passwd/chris
 
+# Install from a CLEAN checkout of a commit that is on GitHub main: my.autoUpgrade
+# only takes over from systems built from a pushed commit (a dirty tree pauses it).
 sudo nixos-install --no-root-passwd --flake /path/to/repo#chris-lenovo
 # reboot
 ```
@@ -115,5 +117,8 @@ Set `my.hibernation.enable = true` and `my.hibernation.resumeOffset` in
 RESUMES rather than cold-booting.
 
 ## Day-to-day
-- Apply: `sudo nixos-rebuild switch --flake .#chris-lenovo`
-- Update: `nix flake update && sudo nixos-rebuild switch --flake .#chris-lenovo`
+- Updates are automatic (`my.autoUpgrade`): GitHub main is built daily for the
+  next boot. `journalctl -u nixos-upgrade` shows the last run, or why it skipped.
+- Apply a change by hand: commit and push it, then
+  `sudo nixos-rebuild switch --flake .#chris-lenovo` from the clean tree. A switch
+  from uncommitted work pauses auto-upgrades until you do that.

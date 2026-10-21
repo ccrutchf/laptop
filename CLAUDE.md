@@ -36,7 +36,7 @@ modules/nixos/
                                   the chris user, networking, fonts, audio, nix-ld, envfs
   desktop.nix                     SHARED: GNOME on GDM, geoclue, CUPS+Avahi, Bluetooth
   overlays.nix                    SHARED: package fixes (pipx, cantarell, envfs, gnome-shell, mutter, wivrn)
-  impermanence / hibernation / secure-boot / backups   opt-in my.* features
+  impermanence / hibernation / secure-boot / backups / auto-upgrade   opt-in my.* features
 home/
   common.nix                      cross-platform home-manager (shell stack, git, core CLIs, claude-backup) — BOTH hosts
   linux.nix                       Linux/desktop home (GNOME/flatpak/dconf/GTK/darkman) + Linux depend hook
@@ -95,6 +95,7 @@ A top-level map of named blocks. Each has filter keys (`platform`, `architecture
 - `hibernation.nix` — lid matrix (docked→`ignore`, AC/battery→suspend-then-hibernate); resume from the NoCoW `/swap/swapfile` (`resume_offset` is install-specific — re-derive on reinstall).
 - `secure-boot.nix` — lanzaboote. **Two-phase**: `my.secureBoot.enable = false` for the first install, then `sbctl create-keys` → enable → `sbctl enroll-keys --microsoft` → re-enroll TPM2 bound to the measured PCRs.
 - `backups.nix` — restic → Nextcloud over rclone WebDAV (`~/Repos`). **Gated** on the sops secrets (`my.backups.enable`).
+- `auto-upgrade.nix` — daily `nixos-rebuild boot` of `github:ccrutchf/laptop/main#<host>` (both NixOS hosts): the new generation applies at the next reboot, never mid-session. **Never replaces a local build:** every system records its source commit (`system.configurationRevision` in `flake.nix`, `<rev>-dirty` for an uncommitted tree), and the guard skips unless the running system and the boot default were both built from a commit on main. So a local `switch` from uncommitted or unpushed work pauses upgrades until it is committed, pushed and switched from the clean tree; `journalctl -u nixos-upgrade` says why. Also skipped on battery and on metered networks. GNOME notifications (to `chris`) for: update ready, upgrade failed, no new generation in 10 days.
 
 The desktop is **GNOME on Wayland** via **GDM** (`services.desktopManager.gnome` + `services.displayManager.gdm` in the host module). GNOME owns power management (low-battery warnings + auto-suspend), lid handling, gnome-keyring (Secret Service), and accessibility (Large Text + fractional scaling in Settings). Desktop tweaks are home-manager: `home/linux.nix` sets dconf (extensions, dash-to-dock, fractional scaling, fonts), GTK, and **darkman** for sunrise/sunset light↔dark. *(The repo previously ran a Hyprland-only session with a greetd/ReGreet greeter; that was removed in favor of GNOME — see git history if resurrecting any of it.)*
 

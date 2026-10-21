@@ -93,6 +93,9 @@ sudo systemd-cryptenroll --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=0+2+7 \
 ```
 
 ## Day-to-day
-- Apply: `sudo nixos-rebuild switch --flake .#chris-msi`
-- Update: `nix flake update && sudo nixos-rebuild switch --flake .#chris-msi`
+- Updates are automatic (`my.autoUpgrade`): GitHub main is built daily for the
+  next boot. `journalctl -u nixos-upgrade` shows the last run, or why it skipped.
+- Apply: `sudo nixos-rebuild switch --flake .#chris-msi`. A switch from
+  uncommitted or unpushed work pauses auto-upgrades until it is pushed and
+  switched from the clean tree.
 - Generations/rollback still work — the store (`/nix`) and boot entries are durable.

@@ -84,6 +84,10 @@
       specialArgs = { inherit inputs; };
       modules = [
         (./hosts + "/${host}/default.nix")   # imports its disko-config + ../../modules/nixos/*
+        # The commit this system was built from ("<rev>-dirty" for an uncommitted
+        # tree), shown by `nixos-version --configuration-revision`. my.autoUpgrade
+        # reads it to never replace a local build with GitHub's main.
+        { system.configurationRevision = self.rev or self.dirtyRev or null; }
 
         disko.nixosModules.disko
         lanzaboote.nixosModules.lanzaboote
