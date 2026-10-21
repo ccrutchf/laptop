@@ -23,6 +23,11 @@
   # openconnect plugin: AnyConnect VPN type in GNOME Settings (UCSD vpn.ucsd.edu).
   networking.networkmanager.plugins = with pkgs; [ networkmanager-openconnect ];
 
+  # BBR congestion control (with the fq qdisc it paces against) instead of cubic.
+  boot.kernelModules = [ "tcp_bbr" ];
+  boot.kernel.sysctl."net.ipv4.tcp_congestion_control" = "bbr";
+  boot.kernel.sysctl."net.core.default_qdisc" = "fq";
+
   time.timeZone = "America/Los_Angeles";
 
   # Was commented out (defaulting to the C locale). Set it explicitly.
