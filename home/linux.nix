@@ -117,7 +117,7 @@ let
 in
 {
   # Shared cross-platform layer (shell stack, git, core CLIs).
-  imports = [ ./common.nix ];
+  imports = [ ./common.nix ./slack-dnd.nix ];
 
   home.homeDirectory = "/home/chris";
 
