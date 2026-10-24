@@ -3,7 +3,7 @@
 Moving the **Lenovo ThinkPad X1 Carbon Gen 9** (i7-1185G7, 16GB, 512GB NVMe,
 Intel Iris Xe) from ChromeOS Flex to NixOS — btrfs-on-LUKS, impermanent root, no
 discrete GPU. It stays the shared couch machine: two accounts, `chris` and
-`fiona`, GNOME with Chrome and Zoom, updating itself (`my.autoUpgrade`).
+`fiona`, GNOME with Firefox and Zoom, updating itself (`my.autoUpgrade`).
 
 > **This wipes the whole disk, including ChromeOS Flex and the Linux container.**
 > Unlike `chris-msi` (dual-boot, where disko names only one of two NVMes), this
@@ -14,9 +14,17 @@ discrete GPU. It stays the shared couch machine: two accounts, `chris` and
 
 ## 0. Before the wipe (from ChromeOS Flex)
 - [ ] **Fiona's local files.** ChromeOS keeps Downloads and anything else under
-      *My Files* on the disk only; Google Drive files and Chrome sync are in her
-      account and come back by themselves. In Files, move what she wants to keep
-      into *Google Drive*, and wait until it shows as synced.
+      *My Files* on the disk only; Google Drive files are in her account and come
+      back by themselves. In Files, move what she wants to keep into *Google
+      Drive*, and wait until it shows as synced.
+- [ ] **Fiona's browser data, out of Chrome.** She moves to Firefox, and Chrome
+      sync doesn't carry over. Firefox can only import from a Chrome installed on
+      the same machine, which won't exist after the wipe. So, in Chrome, into
+      Google Drive:
+      - bookmarks: *Bookmark manager → ⋮ → Export bookmarks* (an `.html` file);
+      - passwords: *Password Manager → Settings → Export passwords* (a `.csv`).
+        This file is every password in plain text: delete it from Drive once
+        Firefox has imported it.
 - [ ] **Chris's Linux container.** Repos travel via GitHub and git-wip (check
       `git wip status` shows *in sync* for each, with Nextcloud up); copy anything
       else in the container's `~` that isn't in a repo or Nextcloud.
@@ -87,8 +95,11 @@ sudo nixos-install --no-root-passwd --flake /path/to/repo#chris-lenovo
 - [ ] **Enroll fingerprints, both of you** — each logged in as themselves:
       Settings → Users → Fingerprint Login (`services.fprintd.enable` is on).
       GNOME then uses it for login (and sudo, for chris).
-- [ ] **Fiona's first login.** Open Chrome (first in the dock) and sign in;
-      Chrome sync brings back her bookmarks, extensions and passwords. Then join
+- [ ] **Fiona's first login.** Open Firefox (first in the dock) and import what
+      step 0 exported from Google Drive: *Bookmarks → Manage bookmarks → Import
+      and Backup → Import Bookmarks from HTML*, then *Passwords (about:logins) →
+      ⋯ → Import from a File*. Delete the passwords `.csv` from Drive afterwards.
+      A Mozilla account (optional) keeps it all synced from then on. Then join
       `zoom.us/test` in the Zoom app and try a screen share.
 - [ ] **Changing a password** is not `passwd` or GNOME Settings: users are
       declarative (`users.mutableUsers = false`) and /etc/shadow is wiped every

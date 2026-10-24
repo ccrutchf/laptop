@@ -87,22 +87,21 @@
   # Machine-specific packages. The generic tooling (pciutils, dnsutils, sops/age,
   # sbctl, ...) comes from modules/nixos/common.nix.
   #
-  # Chrome and Zoom are system packages, not Flatpaks in packages.yaml: depend
+  # Firefox and Zoom are system-wide, not Flatpaks in packages.yaml: depend
   # installs Flatpaks per user, into chris's home, so fiona would see neither.
-  # Chrome is what she had on Flex; signing in brings her sync back. Both update
-  # with the system (my.autoUpgrade).
+  # Firefox is fiona's browser (chris's is Zen); both update with the system
+  # (my.autoUpgrade).
+  programs.firefox.enable = true;
   environment.systemPackages = with pkgs; [
     powertop          # idle/power tuning on battery
-    google-chrome
     zoom-us
   ];
 
   # Dock defaults for anyone who hasn't customised theirs (fiona; chris's home
-  # config doesn't set favorites either). Chrome first, like the Flex shelf.
-  # google-chrome.desktop, not com.google.Chrome.desktop: the latter is NoDisplay.
+  # config doesn't set favorites either). The browser first, like the Flex shelf.
   programs.dconf.profiles.user.databases = [{
     settings."org/gnome/shell".favorite-apps = [
-      "google-chrome.desktop"
+      "firefox.desktop"
       "Zoom.desktop"
       "org.gnome.Nautilus.desktop"
     ];
