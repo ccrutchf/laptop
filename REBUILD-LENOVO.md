@@ -43,18 +43,35 @@ discrete GPU. It stays the shared couch machine: two accounts, `chris` and
 - [ ] Note the firmware is UEFI-only; no CSM/legacy toggle is needed.
 
 ## 2. Partition — DESTRUCTIVE (boot a NixOS installer ISO)
+Get on Wi-Fi (`nmtui`), then take a fresh clone of main. The repo is public, so
+no SSH key is needed yet:
+```sh
+export NIX_CONFIG="experimental-features = nix-command flakes"
+git clone https://github.com/ccrutchf/laptop /tmp/laptop && cd /tmp/laptop
+```
+
 `hosts/chris-lenovo/disko-config.nix` ships a **placeholder device id** that does
 not exist, so disko fails loudly rather than eating the wrong disk. Find the real
-one and edit it in:
+one:
 ```sh
 lsblk -o NAME,SIZE,MODEL,SERIAL          # identify the 512GB NVMe
-ls -l /dev/disk/by-id/ | grep -v part    # take its by-id path
+ls -l /dev/disk/by-id/ | grep -v part    # take its nvme-... by-id path
 ```
-Then, with the id substituted into `disko-config.nix` (prompts for the LUKS passphrase):
+**Don't edit the clone.** The id only matters for partitioning (the installed
+system finds its disk by partition label), and an edited tree installs as a
+`-dirty` build, which starts my.autoUpgrade out paused. Substitute it into a copy
+instead, then run the disko pinned in `flake.lock` (prompts for the LUKS
+passphrase):
 ```sh
-sudo nix --experimental-features "nix-command flakes" \
-  run github:nix-community/disko -- --mode disko ./hosts/chris-lenovo/disko-config.nix
+ID=/dev/disk/by-id/nvme-...              # from above
+sed "s|/dev/disk/by-id/CHANGE-ME-see-REBUILD-LENOVO.md|$ID|" \
+  hosts/chris-lenovo/disko-config.nix > /tmp/disko-lenovo.nix
+grep -n "device = " /tmp/disko-lenovo.nix   # must show $ID, once
+sudo nix run --inputs-from . disko -- --mode disko /tmp/disko-lenovo.nix
 ```
+Keep `/tmp/disko-lenovo.nix` until the install is done: `--mode mount` with it
+re-mounts everything if you have to reboot into the ISO. Afterwards, commit the
+real id into `disko-config.nix` from the installed system, for future rescues.
 
 > No `@blank` step is needed — the impermanence rollback recreates `@` empty on
 > every boot and moves the previous root to `@old`. The freshly-installed `@`
@@ -72,9 +89,10 @@ mkpasswd -m sha-512 | sudo tee /mnt/persist/passwd/chris
 mkpasswd -m sha-512 | sudo tee /mnt/persist/passwd/fiona
 sudo chmod 600 /mnt/persist/passwd/chris /mnt/persist/passwd/fiona
 
-# Install from a CLEAN checkout of a commit that is on GitHub main: my.autoUpgrade
-# only takes over from systems built from a pushed commit (a dirty tree pauses it).
-sudo nixos-install --no-root-passwd --flake /path/to/repo#chris-lenovo
+# From the untouched clone of main (step 2): my.autoUpgrade only takes over from
+# systems built from a pushed commit, and a dirty tree pauses it.
+git -C /tmp/laptop status --short          # must print nothing
+sudo nixos-install --no-root-passwd --flake /tmp/laptop#chris-lenovo
 # reboot
 ```
 

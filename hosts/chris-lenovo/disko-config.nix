@@ -3,18 +3,18 @@
 # GOTCHA — disko is DESTRUCTIVE and NOT idempotent. `disko --mode disko` WIPES and
 # repartitions every device listed below, every run. Unlike chris-msi (dual-boot,
 # where only one of two NVMes is ever named), this machine is NixOS-only: the
-# single 512GB NVMe is wiped in full and the pre-installed Windows 11 goes with
-# it. Run once at install; on later boots use `disko --mode mount`.
+# single 512GB NVMe is wiped in full and ChromeOS Flex goes with it. Run once at
+# install; on later boots use `disko --mode mount`.
 #
 # GOTCHA — the device MUST be a /dev/disk/by-id/* path, not /dev/nvme0n1, which
 # reshuffles across boots once a USB stick is attached.
 #
-# TODO(install): replace the placeholder below with the real id and re-confirm it
-# immediately before running disko:
-#   ls -l /dev/disk/by-id/ | grep -v part   # find the 512GB NVMe
-#   lsblk -o NAME,SIZE,MODEL,SERIAL         # cross-check size + model
-# The placeholder does not exist, so disko fails loudly rather than eating the
-# wrong disk if this step is skipped.
+# TODO(install): the placeholder below does not exist, so disko fails loudly
+# rather than eating the wrong disk. At install, substitute the real id into a
+# COPY of this file (REBUILD-LENOVO.md step 2), not the clone: the id only matters
+# for partitioning (the system mounts by partition label), and an edited tree
+# installs as a -dirty build that starts my.autoUpgrade paused. Commit the real id
+# here afterwards, for `--mode mount` rescues.
 {
   disko.devices = {
     disk.main = {
