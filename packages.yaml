@@ -10,7 +10,8 @@
 # NixOS hosts' hook passes `--tag desktop`, the Crostini container on the Lenovo's
 # ChromeOS Flex passes `--tag crostini`, and the Mac passes none. A block with
 # `tags:` applies only when one of them is active; `exclude_tags:` skips it. Untagged
-# blocks apply to every machine on their platform.
+# blocks apply to every machine on their platform. chris-lenovo, the shared couch
+# machine, also passes `lenovo`, which skips the MSI-only blocks.
 
 
 # ── Cross-platform ───────────────────────────────────────────────────────────
@@ -70,10 +71,12 @@ vscode-extensions:
 # Not on the Marketplace: that repo's tools/install-vscode-extension.sh builds the .vsix
 # at the url: below, and depend installs it from there (reinstalling when the file
 # changes; `depend update` skips it). Without the file and without the extension, the
-# entry fails — run the script first on a new machine.
+# entry fails — run the script first on a new machine. The MSI only: the Lenovo has
+# no phone-dashboard checkout to build it from.
 kairos-vscode:
   platform: linux
   tags: [desktop]
+  exclude_tags: [lenovo]
   vscode:
     phonedash.phone-dash-focus:
       url: ~/.local/share/phone-dash/phone-dash-focus.vsix
@@ -127,38 +130,13 @@ linux-flatpaks:
   flatpak:
     # Comments add context the id doesn't (function or the non-obvious "why");
     # household-name apps are left bare.
-    # video editor
-    org.shotcut.Shotcut:
-      source: flathub
-    us.zoom.Zoom:
-      source: flathub
-    # photo manager / organizer
-    org.gnome.Shotwell:
-      source: flathub
-    # screen recording & live-streaming
-    com.obsproject.Studio:
-      source: flathub
     org.libreoffice.LibreOffice:
       source: flathub
     # office suite with better MS Office (docx/xlsx/pptx) fidelity than LibreOffice
     org.onlyoffice.desktopeditors:
       source: flathub
-    org.blender.Blender:
-      source: flathub
-    # Creality's 3D-printer slicer (OrcaSlicer fork). Not on Flathub: upstream ships
-    # a .flatpak bundle as a release asset. No repo url inside, so `flatpak update`
-    # never touches it — bump url + sha256 to upgrade.
-    io.github.crealityofficial.CrealityPrint:
-      url: https://github.com/CrealityOfficial/CrealityPrint/releases/download/v7.3.0/CrealityPrint-Linux-flatpak_V7.3.0-Release_x86_64.flatpak
-      sha256: 50a281ad21e73c7132ed20f1301ac8cc7c8cb4dfbea6b7d6afbeade6a8856d91
     # 3D point cloud & mesh processing (LAS/E57/PLY); Flathub build is upstream's own
     org.cloudcompare.CloudCompare:
-      source: flathub
-    # lightweight raster image editor (Paint.NET-style)
-    com.github.PintaProject.Pinta:
-      source: flathub
-    # AI image upscaling (Real-ESRGAN, Vulkan)
-    io.gitlab.theevilskeleton.Upscaler:
       source: flathub
     org.signal.Signal:
       source: flathub
@@ -175,12 +153,6 @@ linux-flatpaks:
     # unofficial Teams Electron wrapper — MS gates the web app on Linux (no bg blur)
     com.github.IsmaelMartinez.teams_for_linux:
       source: flathub
-    # N64 emulator — ParaLLEl RDP, gamepad auto-config; successor to simple64
-    io.github.gopher64.gopher64:
-      source: flathub
-    # SNES emulator
-    com.snes9x.Snes9x:
-      source: flathub
     # Plex media client (the Mac gets the `plex` cask)
     tv.plex.PlexDesktop:
       source: flathub
@@ -189,6 +161,46 @@ linux-flatpaks:
     # Wine prefix manager — hosts BrickLink Studio (LEGO CAD; Windows/macOS only,
     # no Linux build). The Studio installer is run inside a bottle by hand.
     com.usebottles.bottles:
+      source: flathub
+
+# The MSI's workstation apps: making things, media work, games. Not on the Lenovo,
+# a shared couch machine with half the disk. Zoom is here too because the Lenovo
+# has it system-wide (hosts/chris-lenovo), for every user.
+msi-flatpaks:
+  platform: linux
+  tags: [desktop]
+  exclude_tags: [lenovo]
+  flatpak:
+    # video editor
+    org.shotcut.Shotcut:
+      source: flathub
+    us.zoom.Zoom:
+      source: flathub
+    # photo manager / organizer
+    org.gnome.Shotwell:
+      source: flathub
+    # screen recording & live-streaming
+    com.obsproject.Studio:
+      source: flathub
+    org.blender.Blender:
+      source: flathub
+    # Creality's 3D-printer slicer (OrcaSlicer fork). Not on Flathub: upstream ships
+    # a .flatpak bundle as a release asset. No repo url inside, so `flatpak update`
+    # never touches it — bump url + sha256 to upgrade.
+    io.github.crealityofficial.CrealityPrint:
+      url: https://github.com/CrealityOfficial/CrealityPrint/releases/download/v7.3.0/CrealityPrint-Linux-flatpak_V7.3.0-Release_x86_64.flatpak
+      sha256: 50a281ad21e73c7132ed20f1301ac8cc7c8cb4dfbea6b7d6afbeade6a8856d91
+    # lightweight raster image editor (Paint.NET-style)
+    com.github.PintaProject.Pinta:
+      source: flathub
+    # AI image upscaling (Real-ESRGAN, Vulkan)
+    io.gitlab.theevilskeleton.Upscaler:
+      source: flathub
+    # N64 emulator — ParaLLEl RDP, gamepad auto-config; successor to simple64
+    io.github.gopher64.gopher64:
+      source: flathub
+    # SNES emulator
+    com.snes9x.Snes9x:
       source: flathub
 
 # e4e-data-management via pipx (CLI: `origin`). Linux x86_64 wheel from the v0.6.1
