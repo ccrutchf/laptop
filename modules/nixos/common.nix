@@ -149,6 +149,13 @@
     alsa.support32Bit = true;
     pulse.enable = true;
   };
+  # Never restart the audio stack from `nixos-rebuild switch`: libpulse clients
+  # (Zen, Slack, Zoom, gsd-media-keys) don't reconnect to a restarted Pulse
+  # server, so a switch that bumps PipeWire silently mutes every running app
+  # until logout. The new PipeWire takes over at the next login/boot instead.
+  # (Socket units are never restarted on their own, so the services suffice.)
+  systemd.user.services = lib.genAttrs [ "pipewire" "pipewire-pulse" "wireplumber" ]
+    (_: { restartIfChanged = false; });
   security.rtkit.enable = true;
 
   # Declarative passwords — REQUIRED under impermanence: /etc/shadow lives on the
