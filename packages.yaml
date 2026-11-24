@@ -66,6 +66,8 @@ vscode-extensions:
       dependencies: [visual-studio-code]
     redhat.vscode-yaml:
       dependencies: [visual-studio-code]
+    james-yu.latex-workshop:   # builds PDFs with latexmk (texliveMedium, home/common.nix)
+      dependencies: [visual-studio-code]
 
 # Kairos window-focus reporter, built from ~/Repos/personal/phone-dashboard/vscode.
 # Not on the Marketplace: that repo's tools/install-vscode-extension.sh builds the .vsix

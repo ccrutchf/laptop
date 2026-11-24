@@ -108,6 +108,7 @@ in
     claude-code
     uv
     depend
+    texliveMedium   # latexmk/pdflatex/xelatex for LaTeX Workshop (packages.yaml); ~2.5 GiB
   ];
 
   programs.git = {
