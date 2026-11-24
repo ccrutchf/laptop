@@ -126,6 +126,12 @@ in
 
   home.homeDirectory = "/home/chris";
 
+  # HTTPS git passwords/tokens go to GNOME Keyring (Secret Service) instead of
+  # being asked for on every push. Only gitFull ships the libsecret helper; this
+  # references just that binary, the `git` on PATH stays the plain one.
+  programs.git.settings.credential.helper =
+    "${pkgs.gitFull}/bin/git-credential-libsecret";
+
   # Lets `depend` (run from the activation hook and ad-hoc) resolve which flake+attr
   # to operate against without passing --flake every time.
   home.sessionVariables.DEPEND_NIXOS_FLAKE = "${config.home.homeDirectory}/Repos/personal/laptop#${osConfig.networking.hostName}";
