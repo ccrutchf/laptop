@@ -68,6 +68,18 @@
       url = "github:UCSD-E4E/synology-filestation";
       inputs.nixpkgs.follows = "nixpkgs";  # dedupe — don't drag in a 2nd nixpkgs
     };
+
+    # Microsoft 365 desktop apps (mainly PowerPoint) under GE-Proton via umu-launcher,
+    # chris-msi only (home/linux.nix). PINNED to a commit, so the weekly lock bump
+    # can't swap the Wine stack out from under a working install; bump on purpose
+    # and retest PowerPoint. Deliberately does NOT follow our nixpkgs: its shims
+    # (ole32, d2d1) are built against the Proton/Wine its own lock was tested with.
+    # The flake ships no Microsoft code: `ms365 install` downloads Office into
+    # ~/.local/share/ms365 (on /home, so it survives the root wipe). Imperative,
+    # one-time; Office's own auto-update is disabled by the launcher.
+    office365 = {
+      url = "github:Tombert/office365_flake/ef0fd10f6194d3af7e7705a3b9b3a366fda9fc74";
+    };
   };
 
   outputs = { self, nixpkgs, home-manager, disko, lanzaboote, sops-nix, ... }@inputs:

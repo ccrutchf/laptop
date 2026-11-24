@@ -166,7 +166,12 @@ in
     file-roller        # GNOME archive manager: right-click Compress/Extract in Files
     unzip              # CLI zip extraction (unzip, zipinfo)
     zip                # CLI zip creation
-  ];
+  ]
+  # Microsoft 365 (PowerPoint/Word/Excel) under GE-Proton: `ms365` CLI, the
+  # ms365-<app> launchers and their GNOME menu entries. See the office365 input
+  # in flake.nix; the Office install itself is a one-time `ms365 install`.
+  ++ lib.optional (osConfig.networking.hostName == "chris-msi")
+    inputs.office365.packages.${pkgs.stdenv.hostPlatform.system}.ms365;
 
   # Default browser = Zen (the Flatpak). Writes ~/.config/mimeapps.list, which GNOME
   # reads for default-app associations.

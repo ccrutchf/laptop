@@ -327,6 +327,41 @@
         "type": "github"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1791179034,
+        "narHash": "sha256-Ni0LBydzaCi8oek12r4mVreuFHqYlM1eTD6SfiENKfw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "494ce7fd23ff6a5dff39e1fb11e9b6f2ac74bf25",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "office365": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1792089719,
+        "narHash": "sha256-WLzfhgeQvWqzWg/tMKaXJHSndewVJMyZPNE4tRA7pMQ=",
+        "owner": "Tombert",
+        "repo": "office365_flake",
+        "rev": "ef0fd10f6194d3af7e7705a3b9b3a366fda9fc74",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Tombert",
+        "repo": "office365_flake",
+        "rev": "ef0fd10f6194d3af7e7705a3b9b3a366fda9fc74",
+        "type": "github"
+      }
+    },
     "pre-commit-hooks-nix": {
       "inputs": {
         "flake-compat": [
@@ -364,6 +399,7 @@
         "nix-darwin": "nix-darwin",
         "nix-index-database": "nix-index-database",
         "nixpkgs": "nixpkgs",
+        "office365": "office365",
         "sops-nix": "sops-nix",
         "synology-filestation": "synology-filestation"
       }
