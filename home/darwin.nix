@@ -12,6 +12,14 @@ let
   depend = inputs.dependency-manager.packages.${pkgs.stdenv.hostPlatform.system}.default;
   synology = inputs.synology-filestation.packages.${pkgs.stdenv.hostPlatform.system};
 
+  # UCSD AnyConnect VPN without Cisco's client: a second way out besides WireGuard
+  # (which some networks block). Pick the "allthruucsd" group when asked
+  # to route ALL traffic through UCSD; the default group splits only campus traffic.
+  # The store path is spelled out because sudo's secure_path skips the Nix profile.
+  ucsd-vpn = pkgs.writeShellScriptBin "ucsd-vpn" ''
+    exec sudo ${pkgs.openconnect}/bin/openconnect --protocol=anyconnect vpn.ucsd.edu "$@"
+  '';
+
 in
 {
   imports = [ ./common.nix ];
@@ -42,6 +50,8 @@ in
   home.packages = [
     synology.synologyfuse-gui
     synology.synology-filestation-fuse
+    pkgs.openconnect
+    ucsd-vpn
   ];
 
   # Reconcile the non-Nix layer on every `darwin-rebuild switch`. Unlike the Linux
