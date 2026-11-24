@@ -27,11 +27,20 @@ with lib;
 let
   cfg = config.my.multihoming;
 
-  # Table and rule ids are derived from the interface index so they are stable
-  # for as long as the link exists and never collide between interfaces.
+  # Table and rule ids are a slot number (0, 1, ... in default-route order)
+  # assigned afresh on every run, NOT the interface index: the dock re-enumerates
+  # on every replug and its ifindex climbs past 1000, which walked its rule out of
+  # the owned priority range, so it was never deleted and every `rule add` failed
+  # with "File exists". Every owned rule is dropped and rebuilt each run, so the
+  # slots only have to be unique within one run.
   reconcile = pkgs.writeShellScript "multihoming-reconcile" ''
     set -u
-    PATH=${makeBinPath [ pkgs.iproute2 pkgs.gawk pkgs.coreutils ]}
+    PATH=${makeBinPath [ pkgs.iproute2 pkgs.gawk pkgs.coreutils pkgs.util-linux ]}
+
+    # The NM dispatcher and the timer can fire together (a switch restarts
+    # NetworkManager); interleaved delete/add passes collide on EEXIST.
+    exec 9>/run/multihoming-reconcile.lock
+    flock 9
 
     action="''${2:-refresh}"
     case "$action" in
@@ -56,10 +65,12 @@ let
     ip -4 route show default |
       awk '{ g=""; d=""; for (i=1;i<=NF;i++) { if ($i=="via") g=$(i+1); if ($i=="dev") d=$(i+1) }
              if (g!="" && d!="") print g, d }' |
+    slot=0
     while read -r gw dev; do
-      idx=$(cat "/sys/class/net/$dev/ifindex" 2>/dev/null) || continue
-      table=$((table_base + idx))
-      prio=$((prio_base + idx))
+      [ "$slot" -le 999 ] || break
+      [ -e "/sys/class/net/$dev" ] || continue
+      table=$((table_base + slot))
+      prio=$((prio_base + slot))
 
       addr=$(ip -4 -o addr show dev "$dev" scope global | awk '{ print $4; exit }')
       [ -n "$addr" ] || continue
@@ -71,6 +82,7 @@ let
         src "''${addr%/*}" table "$table"
       ip route replace default via "$gw" dev "$dev" table "$table"
       ip -4 rule add from "''${addr%/*}" lookup "$table" priority "$prio"
+      slot=$((slot + 1))
     done
   '';
 in {
@@ -80,14 +92,14 @@ in {
     routingTableBase = mkOption {
       type = types.ints.positive;
       default = 1000;
-      description = "Per-interface routing tables are this plus the interface index.";
+      description = "Per-interface routing tables are this plus a per-run slot number (0, 1, ...).";
     };
 
     rulePriorityBase = mkOption {
       type = types.ints.positive;
       default = 10000;
       description = ''
-        Policy rules are created at this priority plus the interface index. The
+        Policy rules are created at this priority plus a per-run slot number. The
         1000 priorities from here up are considered owned by this module and are
         deleted wholesale on every reconcile — don't put other rules in them.
       '';
