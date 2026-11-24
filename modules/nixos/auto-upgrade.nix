@@ -15,7 +15,8 @@
 # journal (`journalctl -u nixos-upgrade`). Commit, push and switch from the clean
 # tree, and upgrades resume.
 #
-# Also skipped: on battery (ConditionACPower) and on a metered network
+# Also skipped: while snoozed (`sudo auto-upgrade-snooze [FROM] UNTIL`; the dates stay
+# on the machine, never in this public repo), on battery (ConditionACPower) and on a metered network
 # (NetworkManager's flag, as git-wip reads it), since a build can pull gigabytes.
 #
 # Notifications go to notifyUser's GNOME session, if one is open (and the first
@@ -41,6 +42,48 @@ let
         --icon=software-update-available "$2" "$3" || true
   '';
 
+  # The snooze window lives on the machine, not in this (public) repo, so dates
+  # away from home are never published. One line: "<from> <until>", YYYY-MM-DD.
+  stateDir = "/var/lib/auto-upgrade";
+  snoozeFile = "${stateDir}/snooze";
+
+  snoozeCmd = pkgs.writeShellScriptBin "auto-upgrade-snooze" ''
+    set -eu
+    PATH=${makeBinPath [ pkgs.coreutils ]}
+    usage() {
+      echo "usage: auto-upgrade-snooze [FROM] UNTIL   skip upgrades FROM (default today) through UNTIL"
+      echo "       auto-upgrade-snooze off            resume now"
+      echo "       auto-upgrade-snooze                show the current snooze"
+      exit 2
+    }
+    day() { date -d "$1" +%F 2> /dev/null || { echo "not a date: $1" >&2; exit 2; }; }
+    needroot() { [ "$(id -u)" = 0 ] || { echo "run with sudo" >&2; exit 1; }; }
+
+    case $# in
+      0)
+        if read -r from until 2> /dev/null < ${snoozeFile}; then
+          if [ "$(date +%F)" \> "$until" ]; then
+            echo "expired: was $from through $until"
+          else
+            echo "snoozed from $from through $until; upgrades resume the day after"
+          fi
+        else
+          echo "not snoozed"
+        fi ;;
+      1)
+        needroot
+        if [ "$1" = off ]; then rm -f ${snoozeFile}; echo "snooze cleared"; exit 0; fi
+        from=$(date +%F); until=$(day "$1") ;;
+      2) needroot; from=$(day "$1"); until=$(day "$2") ;;
+      *) usage ;;
+    esac
+    [ $# -eq 0 ] && exit 0
+    [ "$from" \> "$until" ] && { echo "FROM is after UNTIL" >&2; exit 2; }
+    mkdir -p ${stateDir}
+    echo "$from $until" > ${snoozeFile}.tmp && mv ${snoozeFile}.tmp ${snoozeFile}
+    echo "snoozed from $from through $until; upgrades resume the day after"
+  '';
+
   # True (exit 0) when no generation has been created in staleDays.
   stale = pkgs.writeShellScript "auto-upgrade-stale" ''
     [ -n "$(${pkgs.findutils}/bin/find ${profile} -maxdepth 0 -mtime +${toString cfg.staleDays})" ]
@@ -56,6 +99,16 @@ let
       fi
       exit 1
     }
+
+    # Snooze window from `auto-upgrade-snooze` (local state, never in git): silent.
+    if read -r from until 2> /dev/null < ${snoozeFile}; then
+      # YYYY-MM-DD compares correctly as a string: snoozed when from <= today <= until.
+      today=$(${pkgs.coreutils}/bin/date +%F)
+      if ! [ "$today" \< "$from" ] && ! [ "$today" \> "$until" ]; then
+        echo "skipping: snoozed from $from through $until (auto-upgrade-snooze)"
+        exit 1
+      fi
+    fi
 
     metered=$(${pkgs.dbus}/bin/dbus-send --system --print-reply=literal \
       --dest=org.freedesktop.NetworkManager /org/freedesktop/NetworkManager \
@@ -136,6 +189,12 @@ in {
   };
 
   config = mkIf cfg.enable {
+    environment.systemPackages = [ snoozeCmd ];
+
+    # The snooze file must survive the impermanent root's reset.
+    environment.persistence."/persist".directories =
+      mkIf (attrByPath [ "my" "impermanence" "enable" ] false config) [ stateDir ];
+
     system.autoUpgrade = {
       enable = true;
       flake = "github:${cfg.repo}/${cfg.branch}#${config.networking.hostName}";
