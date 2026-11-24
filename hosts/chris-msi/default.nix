@@ -39,6 +39,17 @@
   # systemd-cryptenroll (and re-enrolled once Secure Boot is on — see secure-boot.nix).
   boot.initrd.luks.devices."cryptroot".crypttabExtraOpts = [ "tpm2-device=auto" ];
 
+  # TEMPORARY (from 2026-11-08, about a month): the Windows NVMe is pulled out and
+  # a separate 1TB drive sits in its slot, one ext4 partition labelled models2, for
+  # model weights. When the Windows drive goes back in, delete this block (the
+  # REBUILD docs still describe that slot as Windows on purpose). Not managed by
+  # disko. nofail plus a short device timeout: boot carries on without the drive.
+  fileSystems."/models2" = {
+    device = "/dev/disk/by-label/models2";
+    fsType = "ext4";
+    options = [ "noatime" "nofail" "x-systemd.device-timeout=5s" ];
+  };
+
   # zswap: compressed RAM cache in front of the disk swap (hibernation-compatible,
   # unlike zram). mem_sleep_default=deep: prefer S3 over drain-prone s2idle for the
   # pre-hibernate window (machine exposes `[s2idle] deep`).
