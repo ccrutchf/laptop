@@ -25,7 +25,8 @@
   boot.kernel.sysctl."net.ipv4.tcp_congestion_control" = "bbr";
   boot.kernel.sysctl."net.core.default_qdisc" = "fq";
 
-  time.timeZone = "America/Los_Angeles";
+  # mkDefault so my.autoTimezone (automatic-timezoned sets this to null) can win.
+  time.timeZone = lib.mkDefault "America/Los_Angeles";
 
   # Was commented out (defaulting to the C locale). Set it explicitly.
   i18n.defaultLocale = "en_US.UTF-8";
