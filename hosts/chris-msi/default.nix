@@ -351,6 +351,7 @@
     cudatoolkit       # nvcc + CUDA libraries on PATH
     pciutils          # lspci
     ddcutil           # monitor DDC/CI control (see monitor-audio-full-scale)
+    opencode          # terminal AI coding agent (VSCode side: msi-vscode in packages.yaml)
     # Fan control (msi-ec). See the msi_ec block near the top of this file.
     (writeShellScriptBin "fan-turbo" ''
       set -eu

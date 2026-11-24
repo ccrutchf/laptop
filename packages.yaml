@@ -81,6 +81,15 @@ kairos-vscode:
     phonedash.phone-dash-focus:
       url: ~/.local/share/phone-dash/phone-dash-focus.vsix
 
+# Extensions for MSI-only tools. sst-dev.opencode drives the `opencode` CLI, which
+# comes from Nix on the MSI only (hosts/chris-msi environment.systemPackages).
+msi-vscode:
+  platform: linux
+  tags: [desktop]
+  exclude_tags: [lenovo]
+  vscode:
+    sst-dev.opencode:
+
 
 # ── Linux · every Linux machine ─────────────────────────────────────────────
 
