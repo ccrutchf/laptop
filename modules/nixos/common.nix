@@ -14,9 +14,6 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # systemd-stage1 initrd: TPM2 auto-unlock + the impermanence rollback both need it.
-  boot.initrd.systemd.enable = true;
-
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
   networking.networkmanager.enable = true;

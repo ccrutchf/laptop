@@ -31,7 +31,6 @@ in {
     mkEnableOption "ephemeral btrfs root (@ reset empty each boot) + /persist state";
 
   config = mkIf cfg.enable {
-    boot.initrd.systemd.enable = true;
     # Put the rollback service's binaries IN the initrd image. The service `path`
     # only sets PATH — without these actually present, `mount` was "command not
     # found" (systemd-initrd mounts via syscalls, so it ships no mount(8)). This was
